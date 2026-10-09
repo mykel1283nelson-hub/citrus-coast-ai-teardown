@@ -222,6 +222,14 @@ Every report ends with the $499/mo AI-employee offer (Stripe).
 """
 
 
+VERIFY_HASH_402INDEX = "5fa074deec27e4bbf42d0b89b04bfcd4e2c85258a2e9ec7bbe8a7c830f2c2c8e"
+
+
+@app.get("/.well-known/402index-verify.txt", response_class=PlainTextResponse)
+def verify_402index():
+    return VERIFY_HASH_402INDEX
+
+
 @app.get("/skill.md", response_class=PlainTextResponse)
 def skill(request: Request):
     base = str(request.base_url).rstrip("/")
