@@ -58,6 +58,43 @@ def _payment_requirements() -> dict:
     }
 
 
+def _bazaar_extensions() -> dict:
+    """Bazaar/agentic-marketplace discovery metadata for the 402 response."""
+    return {
+        "bazaar": {
+            "discoverable": True,
+            "name": "AI Visibility Teardown",
+            "description": ("Deterministic AI-visibility teardown for local service businesses: "
+                            "11 live checks on a website (DNS, reachability, HTTPS, SEO basics, "
+                            "mobile viewport, tap-to-call, Facebook link, contact form, visible phone) "
+                            "with a 0-100 score, per-check findings, and 30-day fixes."),
+            "input": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Business name"},
+                    "url": {"type": "string", "description": "Business website URL"},
+                    "location": {"type": "string", "description": "City/area (optional)"},
+                },
+                "required": ["name", "url"],
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "business_name": {"type": "string"},
+                    "url": {"type": "string"},
+                    "final_url": {"type": "string"},
+                    "score": {"type": "integer", "description": "AI-visibility score, 0-100"},
+                    "findings": {"type": "array",
+                                 "description": "Per-check results: check, status (pass|warn|fail), detail"},
+                    "fixes_30_day": {"type": "array",
+                                     "description": "Recommended fixes for the first 30 days"},
+                    "generated_by": {"type": "string"},
+                },
+            },
+        }
+    }
+
+
 def _report_html(t) -> str:
     rows = ""
     color = {"pass": "#1e6b3a", "warn": "#b7791f", "fail": "#b3261e"}
@@ -166,6 +203,7 @@ async def teardown_api(request: Request):
             status_code=402,
             content={"x402Version": 1,
                      "accepts": [_payment_requirements()],
+                     "extensions": _bazaar_extensions(),
                      "error": "payment required: $0.50 USDC on Base"},
         )
         resp.headers["PAYMENT-REQUIRED"] = base64.b64encode(
