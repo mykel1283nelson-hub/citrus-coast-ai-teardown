@@ -228,6 +228,66 @@ async def teardown_api(request: Request):
     return JSONResponse(content=t.to_dict())
 
 
+def _agent_card(base: str) -> dict:
+    """Google A2A protocol v1.0 Agent Card."""
+    return {
+        "name": "Citrus Coast AI Teardown",
+        "description": ("Deterministic AI-visibility teardown for local service businesses: "
+                        "11 live checks on a website (DNS, reachability, HTTPS, SEO basics, "
+                        "mobile viewport, tap-to-call, Facebook link, contact form, visible phone) "
+                        "with a 0-100 score, per-check findings, and 30-day fixes. "
+                        "Free for humans via web form (3/day); $0.50 USDC on Base per API call via x402."),
+        "url": base,
+        "version": "1.0.0",
+        "provider": {
+            "name": "Citrus Coast AI",
+            "url": "https://github.com/mykel1283nelson-hub/citrus-coast-ai-teardown",
+        },
+        "capabilities": {
+            "streaming": False,
+            "pushNotifications": False,
+            "stateTransitionHistory": False,
+        },
+        "defaultInputModes": ["text"],
+        "defaultOutputModes": ["text", "application/json"],
+        "skills": [
+            {
+                "id": "ai-visibility-teardown",
+                "name": "AI Visibility Teardown",
+                "description": ("Run a deterministic AI-visibility teardown on any business website. "
+                                "Returns a 0-100 score, per-check findings, and 30-day fixes as JSON."),
+                "tags": ["seo", "audit", "small-business", "x402"],
+                "examples": [
+                    "Run a teardown on joesplumbing.com",
+                    "Audit the AI visibility of a local business website",
+                ],
+                "inputModes": ["application/json"],
+                "outputModes": ["application/json"],
+            },
+            {
+                "id": "x402-paid-teardown",
+                "name": "x402 Paid Teardown Endpoint",
+                "description": ("Programmatic access to the teardown engine via the x402 payment protocol: "
+                                "POST /api/teardown returns HTTP 402 with payment requirements "
+                                "($0.50 USDC on Base, eip155:8453); retry with an X-PAYMENT header "
+                                "containing the signed payment payload for a 200 JSON report."),
+                "tags": ["x402", "api", "payments", "base"],
+                "examples": [
+                    "Call the teardown API with x402 payment",
+                ],
+                "inputModes": ["application/json"],
+                "outputModes": ["application/json"],
+            },
+        ],
+    }
+
+
+@app.get("/.well-known/agent.json")
+def agent_card(request: Request):
+    base = str(request.base_url).rstrip("/")
+    return JSONResponse(content=_agent_card(base))
+
+
 @app.get("/.well-known/x402")
 def well_known():
     return {"x402Version": 1, "endpoints": [
