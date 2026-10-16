@@ -3,11 +3,19 @@ Citrus Coast AI — Model B server.
 - GET  /                  web front end (free teardown form, rate-limited)
 - POST /teardown          human tier: free, 3/day per IP -> HTML report + $499 CTA
 - POST /api/teardown      x402 tier: $0.50 USDC on Base per call -> JSON report
+- GET  /api/teardown      discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /.well-known/x402  discovery for x402 indexers
 - GET  /skill.md, /llms.txt  agent-readable docs
 
 $0 to run: deterministic teardown engine (no LLM inference per call).
 Payments settle to the venture Base wallet; server never holds keys.
+x402 v1: verify then settle via the facilitator; the report is delivered
+only after a successful settle (transaction hash returned to the buyer).
+v2 migration is a separate verified step (see RECEIPTS.md) — the live
+challenge stays v1 until v2 is verified end-to-end.
+Referral: toll402's referral (30%, x-toll402-ref / x-toll402-agent) is
+gateway-level on calls TO toll402, not a seller header on this endpoint —
+no fake referral header is implemented (see RECEIPTS.md).
 """
 import base64
 import json
@@ -188,6 +196,72 @@ def _facilitator_verify(payment_payload: dict) -> tuple[bool, str]:
         return False, f"facilitator error: {e}"
 
 
+def _facilitator_settle(payment_payload: dict) -> tuple[bool, dict, str]:
+    """Settle a verified X-PAYMENT payload via the x402 facilitator.
+
+    Returns (ok, settle_response, detail). On success settle_response holds
+    {success, transaction, network, payer} — transaction is the on-chain
+    settlement tx hash and the source of truth for the receipt. On failure
+    nothing is delivered: the caller must return 402, never the report.
+    """
+    import httpx as _hx
+    try:
+        with _hx.Client(timeout=60) as c:
+            r = c.post(f"{FACILITATOR_URL}/settle", json={
+                "x402Version": 1,
+                "paymentPayload": payment_payload,
+                "paymentRequirements": _payment_requirements(),
+            })
+            data = r.json()
+            if bool(data.get("success")) and data.get("transaction"):
+                return True, data, "settled"
+            reason = data.get("errorReason") or data.get("error") or "settle failed"
+            return False, data, str(reason)
+    except Exception as e:
+        return False, {}, f"facilitator error: {e}"
+
+
+SELL_RECEIPTS_PATH = "sell_receipts.jsonl"
+
+
+def _log_sell_receipt(entry: dict) -> None:
+    """Append one sell-side receipt (JSONL, best-effort).
+
+    The on-chain settlement tx hash in the response is the durable receipt;
+    this local file is ephemeral on Render free tier. Never raise on log
+    failure — the tx hash already went back to the buyer in the response.
+    """
+    import os
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), SELL_RECEIPTS_PATH)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
+
+
+def _teardown_402_challenge() -> JSONResponse:
+    """The identical 402 payment challenge, shared by POST (no-payment) and the
+    GET discovery alias so GET-only catalogs can see the price."""
+    resp = JSONResponse(
+        status_code=402,
+        content={"x402Version": 1,
+                 "accepts": [_payment_requirements()],
+                 "extensions": _bazaar_extensions(),
+                 "error": "payment required: $0.50 USDC on Base"},
+    )
+    resp.headers["PAYMENT-REQUIRED"] = base64.b64encode(
+        json.dumps({"x402Version": 1, "accepts": [_payment_requirements()]}).encode()).decode()
+    return resp
+
+
+@app.get("/api/teardown")
+async def teardown_api_get(request: Request):
+    """Discovery alias for GET-only agent catalogs: returns the identical 402
+    challenge (never executes — paid execution is POST with X-PAYMENT)."""
+    return _teardown_402_challenge()
+
+
 @app.post("/api/teardown")
 async def teardown_api(request: Request):
     """x402-protected JSON teardown. No X-PAYMENT -> 402 with payment requirements."""
@@ -199,16 +273,7 @@ async def teardown_api(request: Request):
 
     x_payment = request.headers.get("x-payment")
     if not x_payment:
-        resp = JSONResponse(
-            status_code=402,
-            content={"x402Version": 1,
-                     "accepts": [_payment_requirements()],
-                     "extensions": _bazaar_extensions(),
-                     "error": "payment required: $0.50 USDC on Base"},
-        )
-        resp.headers["PAYMENT-REQUIRED"] = base64.b64encode(
-            json.dumps({"x402Version": 1, "accepts": [_payment_requirements()]}).encode()).decode()
-        return resp
+        return _teardown_402_challenge()
 
     try:
         payload = json.loads(base64.b64decode(x_payment).decode())
@@ -219,13 +284,44 @@ async def teardown_api(request: Request):
     if not ok:
         return JSONResponse(status_code=402, content={"error": f"payment invalid: {detail}"})
 
+    # Settle BEFORE delivering the report. Without settlement the seller is
+    # never paid and no settlement ever triggers Bazaar indexing — the exact
+    # gap this fix closes. A failed settle means 402, never the product.
+    settled, settle_resp, settle_detail = _facilitator_settle(payload)
+    if not settled:
+        return JSONResponse(status_code=402,
+                            content={"error": f"payment settlement failed: {settle_detail}"})
+
     if not name or not url:
         return JSONResponse(status_code=400, content={"error": "need {name, url, location?}"})
     try:
         t = run_teardown(name, url, location)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-    return JSONResponse(content=t.to_dict())
+    result = t.to_dict()
+    result["settlement"] = {
+        "transaction": settle_resp.get("transaction"),
+        "network": settle_resp.get("network") or NETWORK,
+        "payer": settle_resp.get("payer"),
+    }
+    _log_sell_receipt({
+        "agent": "citruscoastai",
+        "direction": "sell",
+        "resource": "/api/teardown",
+        "amount": 0.50,
+        "asset": "USDC",
+        "txid": settle_resp.get("transaction"),
+        "network": settle_resp.get("network") or NETWORK,
+        "payer": settle_resp.get("payer"),
+        "pay_to": PAY_TO,
+        "verdict_class": "settled",
+        "http_status": 200,
+        "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S.000000+00:00", time.gmtime()),
+    })
+    resp = JSONResponse(content=result)
+    resp.headers["X-PAYMENT-RESPONSE"] = base64.b64encode(
+        json.dumps(settle_resp, separators=(",", ":")).encode()).decode()
+    return resp
 
 
 def _agent_card(base: str) -> dict:
@@ -295,7 +391,10 @@ def well_known():
          "accepts": [_payment_requirements()],
          "input": {"name": "string (business name)", "url": "string (website URL)",
                    "location": "string (optional city/area)"},
-         "output": "JSON teardown: score 0-100, findings[], fixes_30_day[]"}]}
+         "output": "JSON teardown: score 0-100, findings[], fixes_30_day[]"},
+        {"method": "GET", "path": "/api/teardown",
+         "note": "discovery only: returns the identical 402 payment challenge so GET-only "
+                 "catalogs can see the price; paid execution is POST with X-PAYMENT"}]}
 
 
 SKILL_MD = """# Citrus Coast AI — Teardown skill
