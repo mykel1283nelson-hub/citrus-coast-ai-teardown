@@ -9,6 +9,7 @@ Citrus Coast AI — Model B server.
 - GET  /api/prepay-check  discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /.well-known/x402  discovery for x402 indexers
 - GET  /skill.md, /llms.txt  agent-readable docs
+- GET  /ledger.json  public machine-readable ledger (balances + receipt rows)
 
 $0 to run: deterministic teardown engine (no LLM inference per call).
 Payments settle to the venture Base wallet; server never holds keys.
@@ -27,6 +28,7 @@ import json
 import re
 import time
 from collections import defaultdict
+from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request, Form
@@ -48,6 +50,18 @@ FACILITATOR_URL = "https://facilitator.xpay.sh"
 FACILITATOR_NETWORK = "base"  # xpay.sh v1 label for Base mainnet (402 stays CAIP-2)
 
 app = FastAPI(title="Citrus Coast AI Teardown API")
+
+# --- canonical ledger (public, machine-readable) ---
+# Served at GET /ledger.json — the live read path promised to clawdsmith (Oct 10).
+# ledger.json is copied verbatim from ai-employee-agency/hidden_files/ledger.json
+# at push time. Contents are public by design: balances + receipt rows (public
+# wallet addresses + txids). No secrets or PII — verified by reading the file
+# before copying (no keys, passwords, tokens, names, or personal identifiers).
+_LEDGER_PATH = Path(__file__).resolve().parent / "ledger.json"
+try:
+    _LEDGER_DATA = json.loads(_LEDGER_PATH.read_text(encoding="utf-8"))
+except Exception:
+    _LEDGER_DATA = None
 
 # --- simple rate limit: 3 free teardowns / IP / day ---
 _hits = defaultdict(list)
@@ -937,6 +951,13 @@ def skill(request: Request):
 @app.get("/llms.txt", response_class=PlainTextResponse)
 def llms():
     return LLMS_TXT
+
+
+@app.get("/ledger.json")
+def ledger():
+    if _LEDGER_DATA is None:
+        return JSONResponse(content={"error": "ledger unavailable"}, status_code=503)
+    return JSONResponse(content=_LEDGER_DATA)
 
 
 if __name__ == "__main__":
