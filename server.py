@@ -20,6 +20,7 @@ Referral: toll402's referral (30%, x-toll402-ref / x-toll402-agent) is
 gateway-level on calls TO toll402, not a seller header on this endpoint —
 no fake referral header is implemented (see RECEIPTS.md).
 """
+import asyncio
 import base64
 import ipaddress
 import json
@@ -756,7 +757,12 @@ async def prepay_check(request: Request):
     if not target:
         return JSONResponse(status_code=400, content={"error": "need {url}"})
     try:
-        result = _run_prepay_check(target)
+        # Run the blocking sync fetch in a worker thread: _run_prepay_check uses
+        # sync httpx, and calling it inline would block the event loop — a
+        # self-target fetch (e.g. checking our own endpoint) would then
+        # deadlock until the fetch timeouts fire. to_thread keeps the loop
+        # free to serve the self-fetch.
+        result = await asyncio.to_thread(_run_prepay_check, target)
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
     result["settlement"] = {
