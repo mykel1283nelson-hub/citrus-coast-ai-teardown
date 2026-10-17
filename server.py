@@ -33,7 +33,11 @@ USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 NETWORK = "eip155:8453"  # Base mainnet
 PRICE_ATOMIC = "500000"  # $0.50 USDC (6 decimals)
 STRIPE_LINK = "https://buy.stripe.com/3cI00l6IvdZufAUgU2eUU00"
-FACILITATOR_URL = "https://x402.org/facilitator"
+# x402.org/facilitator is testnet-only for EVM (verified live 2026-10-16: it
+# returns "No facilitator registered for scheme: exact and network: eip155:8453").
+# xpay.sh is the open, no-auth mainnet facilitator; its v1 network label is "base".
+FACILITATOR_URL = "https://facilitator.xpay.sh"
+FACILITATOR_NETWORK = "base"  # xpay.sh v1 label for Base mainnet (402 stays CAIP-2)
 
 app = FastAPI(title="Citrus Coast AI Teardown API")
 
@@ -52,16 +56,23 @@ def _rate_ok(ip: str) -> bool:
 
 
 def _payment_requirements() -> dict:
+    # Standard x402 v1 requirements. "amount" is kept for our own client's
+    # backward compat; "maxAmountRequired" is the spec field facilitators read
+    # (xpay.sh crashes with a BigInt error if it is missing). "extra" MUST be
+    # the EIP-712 domain of the Base USDC contract — the facilitator verifies
+    # the signature against it. The product description lives in the bazaar
+    # extensions / well-known descriptor, not here.
     return {
         "scheme": "exact",
         "network": NETWORK,
         "asset": USDC_BASE,
         "amount": PRICE_ATOMIC,
+        "maxAmountRequired": PRICE_ATOMIC,
         "payTo": PAY_TO,
         "maxTimeoutSeconds": 300,
         "extra": {
-            "name": "AI Visibility Teardown",
-            "description": "Deterministic AI-visibility teardown: 11 checks on a business website (reachability, HTTPS, SEO basics, mobile, tap-to-call, contact paths) with scored findings and 30-day fixes. Under 500 chars.",
+            "name": "USD Coin",
+            "version": "2",
         },
     }
 
@@ -179,15 +190,30 @@ def teardown_web(request: Request, name: str = Form(...), url: str = Form(...),
     return _report_html(t)
 
 
+def _for_facilitator(payment_payload: dict) -> tuple[dict, dict]:
+    """Translate a client payment payload + our requirements into the
+    facilitator's dialect. xpay.sh v1 expects network label "base" (not
+    CAIP-2 eip155:8453) in BOTH the payload envelope and the requirements.
+    The EIP-3009 signature is over the chainId-8453 EIP-712 domain, not over
+    the network label, so relabelling does not invalidate the signature.
+    The public 402 keeps CAIP-2; only the facilitator call is translated."""
+    payload = dict(payment_payload)
+    payload["network"] = FACILITATOR_NETWORK
+    reqs = _payment_requirements()
+    reqs["network"] = FACILITATOR_NETWORK
+    return payload, reqs
+
+
 def _facilitator_verify(payment_payload: dict) -> tuple[bool, str]:
     """Verify an X-PAYMENT payload via the x402 facilitator. Returns (ok, detail)."""
     import httpx as _hx
+    payload, reqs = _for_facilitator(payment_payload)
     try:
         with _hx.Client(timeout=15) as c:
             r = c.post(f"{FACILITATOR_URL}/verify", json={
                 "x402Version": 1,
-                "paymentPayload": payment_payload,
-                "paymentRequirements": _payment_requirements(),
+                "paymentPayload": payload,
+                "paymentRequirements": reqs,
             })
             data = r.json()
             ok = bool(data.get("isValid"))
@@ -205,15 +231,21 @@ def _facilitator_settle(payment_payload: dict) -> tuple[bool, dict, str]:
     nothing is delivered: the caller must return 402, never the report.
     """
     import httpx as _hx
+    payload, reqs = _for_facilitator(payment_payload)
     try:
         with _hx.Client(timeout=60) as c:
             r = c.post(f"{FACILITATOR_URL}/settle", json={
                 "x402Version": 1,
-                "paymentPayload": payment_payload,
-                "paymentRequirements": _payment_requirements(),
+                "paymentPayload": payload,
+                "paymentRequirements": reqs,
             })
             data = r.json()
-            if bool(data.get("success")) and data.get("transaction"):
+            # Normalize the tx-hash field: xpay.sh returns txID, other
+            # facilitators return transaction/txHash. Downstream reads "transaction".
+            tx = data.get("transaction") or data.get("txID") or data.get("txHash")
+            if bool(data.get("success")) and tx:
+                data = dict(data)
+                data["transaction"] = tx
                 return True, data, "settled"
             reason = data.get("errorReason") or data.get("error") or "settle failed"
             return False, data, str(reason)
