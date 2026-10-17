@@ -41,6 +41,20 @@ headers `X-PAYMENT` / `PAYMENT-SIGNATURE` (request, base64 JSON),
 `PAYMENT-RESPONSE` (success, SettleResponse). Do not advertise v2 until
 a v2 self-settle is verified against the live endpoint with a v2 client.
 
+## Pre-pay check (POST /api/prepay-check, $0.001 USDC on Base)
+
+Same verify -> settle -> deliver flow as the teardown route; a failed
+settle returns 402, never the verdict. The check itself never pays the
+target endpoint and never signs anything: it fetches the target's live
+402 challenge (GET, then POST with an empty JSON body) and diffs payTo /
+price / asset / network against the target origin's public
+`/.well-known/x402` listing. Verdicts: `likely_legit` (live 402 matches
+its public listing), `suspicious` (listing mismatch, missing payTo, or
+host changed via redirect), `cannot_verify` (no live 402, no listing, or
+stale listing). A live 402 alone does not prove legitimacy.
+Receipt shape: same JSONL as the teardown route, `resource =
+"/api/prepay-check"`, `amount = 0.001`.
+
 ## Listings (correct indexes)
 
 - CDP Bazaar / PayAI Bazaar: settlement-triggered discovery — verify via
