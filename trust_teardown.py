@@ -1,1 +1,391 @@
-IiIiCkNpdHJ1cyBDb2FzdCBBSSDigJQgQWdlbnQgVHJ1c3QgVGVhcmRvd24gZW5naW5lLgoKUmVwb3NpdGlvbmVkIDIwMjYtMTAtMTggKE15a2VsKTogZnJvbSAid2Vic2l0ZSBoZWFsdGggYXVkaXQgZm9yIGxvY2FsCmJ1c2luZXNzZXMiIHRvICJkZWVwIHRydXN0IHJlcG9ydCBvbiBhbiB4NDAyIGFnZW50IGVuZHBvaW50LiIgVGhlIGlkZW9sb2d5CmlzIHZlcmlmeS1iZWZvcmUteW91LXBheSwgZGVsaXZlcnktZmlyc3Q6IHRoZSB2ZXJkaWN0ICsgc2NvcmUgYXJlIGFsd2F5cwpmcmVlOyB0aGUgZnVsbCBwZXItY2hlY2sgZXZpZGVuY2UgaXMgdGhlICQwLjUwIHBhaWQgdGllci4KCklucHV0OiBhbiB4NDAyIGVuZHBvaW50IFVSTCAoKyBvcHRpb25hbCBjbGFpbWVkIHRlcm1zIHRvIGF1ZGl0IGFnYWluc3QpLgpPdXRwdXQ6IDYgd2VpZ2h0ZWQgY2hlY2tzIC0+IDAtMTAwIHRydXN0IHNjb3JlIC0+IFRSVVNUIC8gQ0FVVElPTiAvIERPIE5PVCBQQVkuCgokMCBtYXJnaW5hbCBjb3N0IHBlciB0ZWFyZG93bjogZGV0ZXJtaW5pc3RpYyBjaGVja3Mgb25seSwgbm8gTExNIGluZmVyZW5jZS4KVGhlIGNoZWNrIG5ldmVyIHBheXMgdGhlIHRhcmdldCBlbmRwb2ludCBhbmQgbmV2ZXIgc2lnbnMgYW55dGhpbmcuCiIiIgppbXBvcnQgdGltZQpmcm9tIHVybGxpYi5wYXJzZSBpbXBvcnQgdXJscGFyc2UKClVTRENfQkFTRSA9ICIweDgzMzU4OWZDRDZlRGI2RTA4ZjRjN0MzMkQ0ZjcxYjU0YmRBMDI5MTMiCk5FVFdPUktfQ0FJUDIgPSAiZWlwMTU1Ojg0NTMiCk5FVFdPUktfTEFCRUxTID0gKCJlaXAxNTU6ODQ1MyIsICJiYXNlIikKCiMgV2VpZ2h0cyBtdXN0IHN1bSB0byAxMDAuCldFSUdIVFMgPSB7CiAgICAibGl2ZW5lc3MiOiAyMCwKICAgICJjaGFsbGVuZ2VfcGFyc2UiOiAyMCwKICAgICJ0ZXJtc19hdWRpdCI6IDE1LAogICAgImRpc2NvdmVyeV9kb2NzIjogMTUsCiAgICAiaWRlbnRpdHlfaGlzdG9yeSI6IDEwLAogICAgInJlZF9mbGFncyI6IDIwLAp9CgoKZGVmIF9zZXJ2ZXJfaGVscGVycygpOgogICAgIiIiTGF6eSBpbXBvcnQgb2YgdGhlIGZldGNoL3BhcnNlIGhlbHBlcnMgZnJvbSBzZXJ2ZXIucHkgKGF2b2lkcyBhCiAgICBjaXJjdWxhciBpbXBvcnQgYXQgbW9kdWxlIGxvYWQ6IHNlcnZlci5weSBpbXBvcnRzIHRoaXMgbW9kdWxlIGF0IHRvcAogICAgbGV2ZWwsIHNvIHNlcnZlciBpcyBvbmx5IGltcG9ydGVkIGhlcmUgYXQgY2FsbCB0aW1lKS4iIiIKICAgIGltcG9ydCBzZXJ2ZXIgYXMgX3MKICAgIHJldHVybiBfcwoKCmRlZiBfY2hlY2sobmFtZSwgd2VpZ2h0LCBzdGF0dXMsIGRldGFpbCwgZXZpZGVuY2U9Tm9uZSk6CiAgICAiIiJPbmUgY2hlY2sgcmVzdWx0LiBzdGF0dXM6IHBhc3MgfCB3YXJuIHwgZmFpbC4gU2NvcmUgY29udHJpYnV0aW9uOgogICAgcGFzcyA9IGZ1bGwgd2VpZ2h0LCB3YXJuID0gaGFsZiB3ZWlnaHQsIGZhaWwgPSAwLiIiIgogICAgcmV0dXJuIHsKICAgICAgICAiY2hlY2siOiBuYW1lLAogICAgICAgICJ3ZWlnaHQiOiB3ZWlnaHQsCiAgICAgICAgInN0YXR1cyI6IHN0YXR1cywKICAgICAgICAiZGV0YWlsIjogZGV0YWlsLAogICAgICAgICJldmlkZW5jZSI6IGV2aWRlbmNlIG9yIHt9LAogICAgICAgICJzY29yZSI6IHdlaWdodCBpZiBzdGF0dXMgPT0gInBhc3MiIGVsc2UgKHdlaWdodCAvLyAyIGlmIHN0YXR1cyA9PSAid2FybiIgZWxzZSAwKSwKICAgIH0KCgpkZWYgX25vcm1hbGl6ZV91cmwodXJsKToKICAgIHVybCA9ICh1cmwgb3IgIiIpLnN0cmlwKCkKICAgIGlmIHVybCBhbmQgbm90IHVybC5sb3dlcigpLnN0YXJ0c3dpdGgoKCJodHRwOi8vIiwgImh0dHBzOi8vIikpOgogICAgICAgIHVybCA9ICJodHRwczovLyIgKyB1cmwKICAgIHJldHVybiB1cmwKCgpkZWYgcnVuX3RydXN0X3RlYXJkb3duKHRhcmdldF91cmwsIGNsYWltZWQ9Tm9uZSk6CiAgICAiIiJSdW4gdGhlIGZ1bGwgdHJ1c3QgdGVhcmRvd24uIGNsYWltZWQgaXMgYW4gb3B0aW9uYWwgZGljdCB3aXRoIGFueSBvZgogICAge3BheVRvLCBwcmljZV91c2RjLCBhc3NldCwgbmV0d29ya30gdGhlIHJlcXVlc3RlciBiZWxpZXZlcyB0aGUgZW5kcG9pbnQKICAgIGFkdmVydGlzZXMg4oCUIHdlIGRpZmYgdGhlIGxpdmUgNDAyIGFnYWluc3QgaXQuIFJldHVybnMgYSBUcnVzdFJlcG9ydC4iIiIKICAgIFMgPSBfc2VydmVyX2hlbHBlcnMoKQogICAgY2xhaW1lZCA9IGNsYWltZWQgb3Ige30KICAgIHVybCA9IF9ub3JtYWxpemVfdXJsKHRhcmdldF91cmwpCiAgICBwYXJzZWQgPSB1cmxwYXJzZSh1cmwpCiAgICBob3N0ID0gcGFyc2VkLmhvc3RuYW1lIG9yICIiCiAgICB0MCA9IHRpbWUudGltZSgpCiAgICBldmlkZW5jZV9iYW5rID0ge30KCiAgICAjIC0tLS0gMS4gTElWRU5FU1MgKEdFVCArIFBPU1QgcHJvYmUpIC0tLS0KICAgIGdldF9zdGF0dXMsIHBvc3Rfc3RhdHVzLCBnZXRfbXMsIHBvc3RfbXMgPSBOb25lLCBOb25lLCBOb25lLCBOb25lCiAgICByZWRpcmVjdF9jaGFpbiA9IFtdCiAgICBpZiBub3QgaG9zdCBvciBTLl9ob3N0X2Jsb2NrZWQoaG9zdCk6CiAgICAgICAgbGl2ZW5lc3MgPSBfY2hlY2soImxpdmVuZXNzIiwgV0VJR0hUU1sibGl2ZW5lc3MiXSwgImZhaWwiLAogICAgICAgICAgICAgICAgICAgICAgICAgICJ0YXJnZXQgaG9zdCBpcyBtaXNzaW5nIG9yIGJsb2NrZWQg4oCUIHJlZnVzaW5nIHRvIHByb2JlIiwKICAgICAgICAgICAgICAgICAgICAgICAgICB7Imhvc3QiOiBob3N0fSkKICAgIGVsc2U6CiAgICAgICAgdHJ5OgogICAgICAgICAgICB3aXRoIFMuX2NoZWNrX2h0dHBfY2xpZW50KGhvc3QpIGFzIGM6CiAgICAgICAgICAgICAgICB0ID0gdGltZS50aW1lKCkKICAgICAgICAgICAgICAgIHRyeToKICAgICAgICAgICAgICAgICAgICByID0gYy5nZXQodXJsKQogICAgICAgICAgICAgICAgICAgIGdldF9zdGF0dXMsIGdldF9tcyA9IHIuc3RhdHVzX2NvZGUsIGludCgodGltZS50aW1lKCkgLSB0KSAqIDEwMDApCiAgICAgICAgICAgICAgICAgICAgcmVkaXJlY3RfY2hhaW4gPSBbc3RyKGgudXJsKSBmb3IgaCBpbiByLmhpc3RvcnldICsgW3N0cihyLnVybCldCiAgICAgICAgICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgICAgICAgICAgZ2V0X3N0YXR1cyA9IGYiZXJyb3I6IHtlfSIKICAgICAgICAgICAgICAgIHQgPSB0aW1lLnRpbWUoKQogICAgICAgICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgICAgIHIgPSBjLnBvc3QodXJsLCBqc29uPXt9KQogICAgICAgICAgICAgICAgICAgIHBvc3Rfc3RhdHVzLCBwb3N0X21zID0gci5zdGF0dXNfY29kZSwgaW50KCh0aW1lLnRpbWUoKSAtIHQpICogMTAwMCkKICAgICAgICAgICAgICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgICAgICAgICAgICAgICAgICBwb3N0X3N0YXR1cyA9IGYiZXJyb3I6IHtlfSIKICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgIGdldF9zdGF0dXMgPSBmImNsaWVudCBlcnJvcjoge2V9IgogICAgICAgIGV2aWRlbmNlX2JhbmtbInByb2JlcyJdID0gewogICAgICAgICAgICAiZ2V0X3N0YXR1cyI6IGdldF9zdGF0dXMsICJnZXRfbXMiOiBnZXRfbXMsCiAgICAgICAgICAgICJwb3N0X3N0YXR1cyI6IHBvc3Rfc3RhdHVzLCAicG9zdF9tcyI6IHBvc3RfbXMsCiAgICAgICAgICAgICJyZWRpcmVjdF9jaGFpbiI6IHJlZGlyZWN0X2NoYWluLAogICAgICAgIH0KICAgICAgICBva19nZXQgPSBpc2luc3RhbmNlKGdldF9zdGF0dXMsIGludCkKICAgICAgICBva19wb3N0ID0gaXNpbnN0YW5jZShwb3N0X3N0YXR1cywgaW50KQogICAgICAgIGlmIG9rX2dldCBhbmQgb2tfcG9zdDoKICAgICAgICAgICAgbGl2ZW5lc3MgPSBfY2hlY2soImxpdmVuZXNzIiwgV0VJR0hUU1sibGl2ZW5lc3MiXSwgInBhc3MiLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBmImVuZHBvaW50IHJlc3BvbmRzIChHRVQge2dldF9zdGF0dXN9IGluIHtnZXRfbXN9bXMsICIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZiJQT1NUIHtwb3N0X3N0YXR1c30gaW4ge3Bvc3RfbXN9bXMpIiwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZXZpZGVuY2VfYmFua1sicHJvYmVzIl0pCiAgICAgICAgZWxpZiBva19nZXQgb3Igb2tfcG9zdDoKICAgICAgICAgICAgbGl2ZW5lc3MgPSBfY2hlY2soImxpdmVuZXNzIiwgV0VJR0hUU1sibGl2ZW5lc3MiXSwgIndhcm4iLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBmImVuZHBvaW50IHBhcnRpYWxseSByZXNwb25kcyAoR0VUIHtnZXRfc3RhdHVzfSwgUE9TVCB7cG9zdF9zdGF0dXN9KSIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbInByb2JlcyJdKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIGxpdmVuZXNzID0gX2NoZWNrKCJsaXZlbmVzcyIsIFdFSUdIVFNbImxpdmVuZXNzIl0sICJmYWlsIiwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZiJlbmRwb2ludCB1bnJlYWNoYWJsZSAoR0VUIHtnZXRfc3RhdHVzfSwgUE9TVCB7cG9zdF9zdGF0dXN9KSIsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbInByb2JlcyJdKQoKICAgICMgLS0tLSAyLiBDSEFMTEVOR0UgUEFSU0UgKGxpdmUgNDAyKSAtLS0tCiAgICBjaGFsbGVuZ2UsIGNoYWxfd2FybmluZ3MsIGNoYWxfZGV0YWlsID0gTm9uZSwgW10sICIiCiAgICBpZiBsaXZlbmVzc1sic3RhdHVzIl0gIT0gImZhaWwiOgogICAgICAgIGNoYWxsZW5nZSwgY2hhbF93YXJuaW5ncywgY2hhbF9kZXRhaWwgPSBTLl9mZXRjaF9saXZlXzQwMih1cmwpCiAgICBpZiBjaGFsbGVuZ2U6CiAgICAgICAgbWlzc2luZyA9IFtrIGZvciBrIGluICgicGF5VG8iLCAiYXNzZXQiLCAibmV0d29yayIsICJzY2hlbWUiKQogICAgICAgICAgICAgICAgICAgaWYgbm90IGNoYWxsZW5nZS5nZXQoayldCiAgICAgICAgZXZpZGVuY2VfYmFua1siY2hhbGxlbmdlIl0gPSB7CiAgICAgICAgICAgICJwYXJzZWQiOiBjaGFsbGVuZ2UsCiAgICAgICAgICAgICJ3YXJuaW5ncyI6IGNoYWxfd2FybmluZ3MsCiAgICAgICAgICAgICJyYXdfaG9zdCI6IGNoYWxsZW5nZS5nZXQoImhvc3QiKSwKICAgICAgICAgICAgImZpbmFsX3VybCI6IGNoYWxsZW5nZS5nZXQoImZpbmFsX3VybCIpLAogICAgICAgIH0KICAgICAgICBpZiBub3QgbWlzc2luZzoKICAgICAgICAgICAgY2hhbGxlbmdlX2NoZWNrID0gX2NoZWNrKAogICAgICAgICAgICAgICAgImNoYWxsZW5nZV9wYXJzZSIsIFdFSUdIVFNbImNoYWxsZW5nZV9wYXJzZSJdLCAicGFzcyIsCiAgICAgICAgICAgICAgICBmImxpdmUgNDAyIHBhcnNlZDoge2NoYWxsZW5nZVsncHJpY2VfdXNkYyddfSBVU0RDIHRvICIKICAgICAgICAgICAgICAgIGYie2NoYWxsZW5nZVsncGF5VG8nXVs6MTBdfeKApiBvbiB7Y2hhbGxlbmdlWyduZXR3b3JrJ119IiwKICAgICAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbImNoYWxsZW5nZSJdKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIGNoYWxsZW5nZV9jaGVjayA9IF9jaGVjaygKICAgICAgICAgICAgICAgICJjaGFsbGVuZ2VfcGFyc2UiLCBXRUlHSFRTWyJjaGFsbGVuZ2VfcGFyc2UiXSwgIndhcm4iLAogICAgICAgICAgICAgICAgZiI0MDIgcGFyc2VkIGJ1dCBtaXNzaW5nIGZpZWxkczogeycsICcuam9pbihtaXNzaW5nKX0iLAogICAgICAgICAgICAgICAgZXZpZGVuY2VfYmFua1siY2hhbGxlbmdlIl0pCiAgICBlbHNlOgogICAgICAgIGV2aWRlbmNlX2JhbmtbImNoYWxsZW5nZSJdID0geyJwYXJzZWQiOiBOb25lLCAid2FybmluZ3MiOiBjaGFsX3dhcm5pbmdzLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJkZXRhaWwiOiBjaGFsX2RldGFpbH0KICAgICAgICBjaGFsbGVuZ2VfY2hlY2sgPSBfY2hlY2soCiAgICAgICAgICAgICJjaGFsbGVuZ2VfcGFyc2UiLCBXRUlHSFRTWyJjaGFsbGVuZ2VfcGFyc2UiXSwgImZhaWwiLAogICAgICAgICAgICBmIm5vIHBhcnNlYWJsZSA0MDIgY2hhbGxlbmdlICh7Y2hhbF9kZXRhaWx9KSIsCiAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbImNoYWxsZW5nZSJdKQoKICAgICMgLS0tLSAzLiBURVJNUyBBVURJVCAtLS0tCiAgICB0ZXJtc19ub3RlcyA9IFtdCiAgICB0ZXJtc19zdGF0dXMgPSAicGFzcyIKICAgIGlmIGNoYWxsZW5nZToKICAgICAgICBwcmljZSA9IGNoYWxsZW5nZS5nZXQoInByaWNlX3VzZGMiKQogICAgICAgIGlmIHByaWNlID09IDA6CiAgICAgICAgICAgIHRlcm1zX25vdGVzLmFwcGVuZCgicHJpY2UgaXMgemVybyDigJQgdW51c3VhbCBmb3IgYSBwYWlkIGVuZHBvaW50IikKICAgICAgICAgICAgdGVybXNfc3RhdHVzID0gIndhcm4iCiAgICAgICAgYXNzZXQgPSAoY2hhbGxlbmdlLmdldCgiYXNzZXQiKSBvciAiIikubG93ZXIoKQogICAgICAgIGlmIGFzc2V0IGFuZCBhc3NldCAhPSBVU0RDX0JBU0UubG93ZXIoKToKICAgICAgICAgICAgdGVybXNfbm90ZXMuYXBwZW5kKGYiYXNzZXQgaXMgbm90IEJhc2UgVVNEQyAoe2NoYWxsZW5nZS5nZXQoJ2Fzc2V0Jyl9KSIpCiAgICAgICAgICAgIHRlcm1zX3N0YXR1cyA9ICJ3YXJuIgogICAgICAgIG5ldCA9IChjaGFsbGVuZ2UuZ2V0KCJuZXR3b3JrIikgb3IgIiIpLmxvd2VyKCkKICAgICAgICBpZiBuZXQgYW5kIG5ldCBub3QgaW4gTkVUV09SS19MQUJFTFM6CiAgICAgICAgICAgIHRlcm1zX25vdGVzLmFwcGVuZChmIm5ldHdvcmsgaXMge2NoYWxsZW5nZS5nZXQoJ25ldHdvcmsnKX0sIG5vdCBCYXNlIikKICAgICAgICAgICAgdGVybXNfc3RhdHVzID0gIndhcm4iCiAgICAgICAgaWYgKGNoYWxsZW5nZS5nZXQoInNjaGVtZSIpIG9yICIiKS5sb3dlcigpICE9ICJleGFjdCI6CiAgICAgICAgICAgIHRlcm1zX25vdGVzLmFwcGVuZChmInNjaGVtZSBpcyB7Y2hhbGxlbmdlLmdldCgnc2NoZW1lJyl9LCBub3QgJ2V4YWN0JyIpCiAgICAgICAgICAgIHRlcm1zX3N0YXR1cyA9ICJ3YXJuIgogICAgICAgICMgRGlmZiBhZ2FpbnN0IGNsYWltZWQgdGVybXMsIHdoZW4gdGhlIHJlcXVlc3RlciBzdXBwbGllZCB0aGVtLgogICAgICAgIGZvciBmaWVsZCBpbiAoInBheVRvIiwgImFzc2V0IiwgIm5ldHdvcmsiKToKICAgICAgICAgICAgY2xhaW1lZF92ID0gY2xhaW1lZC5nZXQoZmllbGQpCiAgICAgICAgICAgIGxpdmVfdiA9IGNoYWxsZW5nZS5nZXQoZmllbGQpCiAgICAgICAgICAgIGlmIGNsYWltZWRfdiBhbmQgbGl2ZV92IGFuZCBzdHIoY2xhaW1lZF92KS5sb3dlcigpICE9IHN0cihsaXZlX3YpLmxvd2VyKCk6CiAgICAgICAgICAgICAgICB0ZXJtc19ub3Rlcy5hcHBlbmQoZiJjbGFpbWVkIHtmaWVsZH0gKHtjbGFpbWVkX3Z9KSAhPSBsaXZlIHtmaWVsZH0gKHtsaXZlX3Z9KSIpCiAgICAgICAgICAgICAgICB0ZXJtc19zdGF0dXMgPSAiZmFpbCIKICAgICAgICBjbGFpbWVkX3ByaWNlID0gY2xhaW1lZC5nZXQoInByaWNlX3VzZGMiKQogICAgICAgIGlmIGNsYWltZWRfcHJpY2UgaXMgbm90IE5vbmUgYW5kIHByaWNlIGlzIG5vdCBOb25lOgogICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICBpZiBhYnMoZmxvYXQoY2xhaW1lZF9wcmljZSkgLSBmbG9hdChwcmljZSkpID4gMWUtOToKICAgICAgICAgICAgICAgICAgICB0ZXJtc19ub3Rlcy5hcHBlbmQoZiJjbGFpbWVkIHByaWNlICh7Y2xhaW1lZF9wcmljZX0pICE9IGxpdmUgcHJpY2UgKHtwcmljZX0pIikKICAgICAgICAgICAgICAgICAgICB0ZXJtc19zdGF0dXMgPSAiZmFpbCIKICAgICAgICAgICAgZXhjZXB0IChUeXBlRXJyb3IsIFZhbHVlRXJyb3IpOgogICAgICAgICAgICAgICAgcGFzcwogICAgICAgIGlmIG5vdCB0ZXJtc19ub3RlczoKICAgICAgICAgICAgdGVybXNfbm90ZXMuYXBwZW5kKCJ0ZXJtcyBzYW5lOyBubyBjbGFpbWVkIHRlcm1zIHRvIGRpZmYiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiBub3QgY2xhaW1lZCBlbHNlICJsaXZlIHRlcm1zIG1hdGNoIGNsYWltZWQgdGVybXMiKQogICAgZWxzZToKICAgICAgICB0ZXJtc19zdGF0dXMgPSAiZmFpbCIKICAgICAgICB0ZXJtc19ub3Rlcy5hcHBlbmQoIm5vIGxpdmUgY2hhbGxlbmdlIHRvIGF1ZGl0IikKICAgIGV2aWRlbmNlX2JhbmtbInRlcm1zIl0gPSB7Im5vdGVzIjogdGVybXNfbm90ZXMsICJjbGFpbWVkIjogY2xhaW1lZH0KICAgIHRlcm1zX2NoZWNrID0gX2NoZWNrKCJ0ZXJtc19hdWRpdCIsIFdFSUdIVFNbInRlcm1zX2F1ZGl0Il0sIHRlcm1zX3N0YXR1cywKICAgICAgICAgICAgICAgICAgICAgICAgICI7ICIuam9pbih0ZXJtc19ub3RlcyksIGV2aWRlbmNlX2JhbmtbInRlcm1zIl0pCgogICAgIyAtLS0tIDQuIERJU0NPVkVSWSBET0NTIC0tLS0KICAgIGRvY3Nfbm90ZXMgPSBbXQogICAgZG9jc19mb3VuZCA9IHt9CiAgICBkb2NzX3N0YXR1cyA9ICJ3YXJuIiAgIyBubyBkb2NzIGF0IGFsbCBpcyBhIHdhcm4sIG5vdCBhIGZhaWwKICAgIGlmIGxpdmVuZXNzWyJzdGF0dXMiXSAhPSAiZmFpbCI6CiAgICAgICAgb3JpZ2luID0gZiJ7cGFyc2VkLnNjaGVtZX06Ly97cGFyc2VkLm5ldGxvY30iCiAgICAgICAgdHJ5OgogICAgICAgICAgICB3aXRoIFMuX2NoZWNrX2h0dHBfY2xpZW50KGhvc3QpIGFzIGM6CiAgICAgICAgICAgICAgICBmb3IgcGF0aCBpbiAoIi8ud2VsbC1rbm93bi94NDAyIiwgIi8ud2VsbC1rbm93bi9hZ2VudC5qc29uIiwgIi9za2lsbC5tZCIpOgogICAgICAgICAgICAgICAgICAgIHRyeToKICAgICAgICAgICAgICAgICAgICAgICAgciA9IGMuZ2V0KG9yaWdpbiArIHBhdGgpCiAgICAgICAgICAgICAgICAgICAgICAgIGZvdW5kID0gci5zdGF0dXNfY29kZSA9PSAyMDAKICAgICAgICAgICAgICAgICAgICAgICAgZG9jc19mb3VuZFtwYXRoXSA9IHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICJzdGF0dXMiOiByLnN0YXR1c19jb2RlLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgImZvdW5kIjogZm91bmQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAiYnl0ZXMiOiBsZW4oci5jb250ZW50KSBpZiBmb3VuZCBlbHNlIDAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAiY29udGVudF90cnVuY2F0ZWQiOiAoci50ZXh0WzoyMDAwXSBpZiBmb3VuZCBlbHNlIE5vbmUpLAogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgIGlmIGZvdW5kOgogICAgICAgICAgICAgICAgICAgICAgICAgICAgZG9jc19ub3Rlcy5hcHBlbmQoZiJ7cGF0aH0gcHJlc2VudCIpCiAgICAgICAgICAgICAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgICAgICAgICAgICAgICAgICAgICBkb2NzX2ZvdW5kW3BhdGhdID0geyJmb3VuZCI6IEZhbHNlLCAiZXJyb3IiOiBzdHIoZSl9CiAgICAgICAgICAgICMgRGlmZiB0aGUgeDQwMiBsaXN0aW5nIGFnYWluc3QgdGhlIGxpdmUgY2hhbGxlbmdlLgogICAgICAgICAgICBpZiBkb2NzX2ZvdW5kLmdldCgiLy53ZWxsLWtub3duL3g0MDIiLCB7fSkuZ2V0KCJmb3VuZCIpIGFuZCBjaGFsbGVuZ2U6CiAgICAgICAgICAgICAgICBsaXN0aW5nX21hdGNoLCBsaXN0aW5nX3dhcm5pbmdzID0gUy5fZmV0Y2hfbGlzdGluZyh1cmwsIGNoYWxsZW5nZSkKICAgICAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbImRpc2NvdmVyeSJdID0geyJkb2NzIjogZG9jc19mb3VuZCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJsaXN0aW5nX21hdGNoIjogbGlzdGluZ19tYXRjaCwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJsaXN0aW5nX3dhcm5pbmdzIjogbGlzdGluZ193YXJuaW5nc30KICAgICAgICAgICAgICAgIGlmIGxpc3RpbmdfbWF0Y2ggPT0gIm1hdGNoZWQiOgogICAgICAgICAgICAgICAgICAgIGRvY3Nfbm90ZXMuYXBwZW5kKCJwdWJsaWMgbGlzdGluZyBtYXRjaGVzIGxpdmUgNDAyIikKICAgICAgICAgICAgICAgICAgICBkb2NzX3N0YXR1cyA9ICJwYXNzIgogICAgICAgICAgICAgICAgZWxpZiBsaXN0aW5nX21hdGNoID09ICJtaXNtYXRjaGVkIjoKICAgICAgICAgICAgICAgICAgICBkb2NzX25vdGVzLmFwcGVuZCgicHVibGljIGxpc3RpbmcgTUlTTUFUQ0hFUyBsaXZlIDQwMjogIgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICsgIjsgIi5qb2luKGxpc3Rpbmdfd2FybmluZ3MpKQogICAgICAgICAgICAgICAgICAgIGRvY3Nfc3RhdHVzID0gImZhaWwiCiAgICAgICAgICAgICAgICBlbHNlOgogICAgICAgICAgICAgICAgICAgIGRvY3Nfbm90ZXMuYXBwZW5kKGYibGlzdGluZyB7bGlzdGluZ19tYXRjaH06ICIKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICArICI7ICIuam9pbihsaXN0aW5nX3dhcm5pbmdzKSkKICAgICAgICAgICAgICAgICAgICBkb2NzX3N0YXR1cyA9ICJ3YXJuIgogICAgICAgICAgICBlbHNlOgogICAgICAgICAgICAgICAgZXZpZGVuY2VfYmFua1siZGlzY292ZXJ5Il0gPSB7ImRvY3MiOiBkb2NzX2ZvdW5kfQogICAgICAgICAgICAgICAgaWYgbm90IGFueShkLmdldCgiZm91bmQiKSBmb3IgZCBpbiBkb2NzX2ZvdW5kLnZhbHVlcygpKToKICAgICAgICAgICAgICAgICAgICBkb2NzX25vdGVzLmFwcGVuZCgibm8gZGlzY292ZXJ5IGRvY3MgZm91bmQgKC8ud2VsbC1rbm93bi94NDAyLCAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIi8ud2VsbC1rbm93bi9hZ2VudC5qc29uLCAvc2tpbGwubWQgYWxsIG1pc3NpbmcpIikKICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgIGRvY3Nfbm90ZXMuYXBwZW5kKGYiZGlzY292ZXJ5IGZldGNoIGZhaWxlZDoge2V9IikKICAgICAgICAgICAgZXZpZGVuY2VfYmFua1siZGlzY292ZXJ5Il0gPSB7ImVycm9yIjogc3RyKGUpfQogICAgZWxzZToKICAgICAgICBkb2NzX25vdGVzLmFwcGVuZCgiZW5kcG9pbnQgdW5yZWFjaGFibGUg4oCUIGRpc2NvdmVyeSBkb2NzIG5vdCBjaGVja2VkIikKICAgICAgICBldmlkZW5jZV9iYW5rWyJkaXNjb3ZlcnkiXSA9IHsic2tpcHBlZCI6IFRydWV9CiAgICBkaXNjb3ZlcnlfY2hlY2sgPSBfY2hlY2soImRpc2NvdmVyeV9kb2NzIiwgV0VJR0hUU1siZGlzY292ZXJ5X2RvY3MiXSwgZG9jc19zdGF0dXMsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIjsgIi5qb2luKGRvY3Nfbm90ZXMpIGlmIGRvY3Nfbm90ZXMgZWxzZSAibm8gbm90ZXMiLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgIGV2aWRlbmNlX2JhbmtbImRpc2NvdmVyeSJdKQoKICAgICMgLS0tLSA1LiBJREVOVElUWSAvIEhJU1RPUlkgLS0tLQogICAgaWRfbm90ZXMgPSBbXQogICAgaWRfc3RhdHVzID0gIndhcm4iCiAgICBwYXlfdG8gPSAoY2hhbGxlbmdlIG9yIHt9KS5nZXQoInBheVRvIikgb3IgIiIKICAgIGhpc3RvcnlfaGl0cyA9IFtdCiAgICBpZiBwYXlfdG86CiAgICAgICAgIyBLbm93biBvcGVyYXRvcjogb3VyIG93biB2ZW50dXJlIHdhbGxldC4KICAgICAgICBpZiBwYXlfdG8ubG93ZXIoKSA9PSBTLlBBWV9UTy5sb3dlcigpOgogICAgICAgICAgICBpZF9ub3Rlcy5hcHBlbmQoInBheVRvIGlzIHRoZSBDaXRydXMgQ29hc3QgQUkgdmVudHVyZSB3YWxsZXQgKG91ciBvd24gZW5kcG9pbnQpIikKICAgICAgICAgICAgaWRfc3RhdHVzID0gInBhc3MiCiAgICAgICAgZWxzZToKICAgICAgICAgICAgIyBCZXN0LWVmZm9ydCBsb2NhbCBoaXN0b3J5OiBzZWxsLXNpZGUgcmVjZWlwdHMgb24gdGhpcyBob3N0LgogICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICBpbXBvcnQganNvbiBhcyBfanNvbgogICAgICAgICAgICAgICAgaW1wb3J0IG9zIGFzIF9vcwogICAgICAgICAgICAgICAgcmVjZWlwdHNfcGF0aCA9IF9vcy5wYXRoLmpvaW4oCiAgICAgICAgICAgICAgICAgICAgX29zLnBhdGguZGlybmFtZShfb3MucGF0aC5hYnNwYXRoKFMuX19maWxlX18pKSwgInNlbGxfcmVjZWlwdHMuanNvbmwiKQogICAgICAgICAgICAgICAgaWYgX29zLnBhdGguZXhpc3RzKHJlY2VpcHRzX3BhdGgpOgogICAgICAgICAgICAgICAgICAgIHdpdGggb3BlbihyZWNlaXB0c19wYXRoLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgICAgICAgICAgICAgICAgICAgICBmb3IgbGluZSBpbiBmOgogICAgICAgICAgICAgICAgICAgICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJvdyA9IF9qc29uLmxvYWRzKGxpbmUpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiAocm93LmdldCgicGF5X3RvIikgb3IgIiIpLmxvd2VyKCkgPT0gcGF5X3RvLmxvd2VyKCk6CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaGlzdG9yeV9oaXRzLmFwcGVuZCh7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJ0eGlkIjogcm93LmdldCgidHhpZCIpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAiYW1vdW50Ijogcm93LmdldCgiYW1vdW50IiksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJyZXNvdXJjZSI6IHJvdy5nZXQoInJlc291cmNlIiksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJvYnNlcnZlZF9hdCI6IHJvdy5nZXQoIm9ic2VydmVkX2F0IiksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfSkKICAgICAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICAgICAgICAgIHBhc3MKICAgICAgICAgICAgaWYgaGlzdG9yeV9oaXRzOgogICAgICAgICAgICAgICAgaWRfbm90ZXMuYXBwZW5kKGYicGF5VG8gc2VlbiBpbiB7bGVuKGhpc3RvcnlfaGl0cyl9IGxvY2FsIHNlbGwgcmVjZWlwdChzKSIpCiAgICAgICAgICAgICAgICBpZF9zdGF0dXMgPSAicGFzcyIKICAgICAgICAgICAgZWxzZToKICAgICAgICAgICAgICAgIGlkX25vdGVzLmFwcGVuZCgicGF5VG8gaGFzIG5vIGhpc3RvcnkgaW4gb3VyIHJlY29yZHMg4oCUIG5vdCBwcm9vZiBvZiAiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIm1hbGljZSwgYnV0IG5vIHRyYWNrIHJlY29yZCBlaXRoZXIiKQogICAgZWxzZToKICAgICAgICBpZF9ub3Rlcy5hcHBlbmQoIm5vIHBheVRvIHRvIGNoZWNrIChubyBsaXZlIGNoYWxsZW5nZSkiKQogICAgICAgIGlkX3N0YXR1cyA9ICJmYWlsIgogICAgZXZpZGVuY2VfYmFua1siaWRlbnRpdHkiXSA9IHsicGF5VG8iOiBwYXlfdG8sICJoaXN0b3J5X2hpdHMiOiBoaXN0b3J5X2hpdHMsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICJub3RlcyI6IGlkX25vdGVzfQogICAgaWRlbnRpdHlfY2hlY2sgPSBfY2hlY2soImlkZW50aXR5X2hpc3RvcnkiLCBXRUlHSFRTWyJpZGVudGl0eV9oaXN0b3J5Il0sIGlkX3N0YXR1cywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICI7ICIuam9pbihpZF9ub3RlcyksIGV2aWRlbmNlX2JhbmtbImlkZW50aXR5Il0pCgogICAgIyAtLS0tIDYuIFJFRCBGTEFHUyAoYWdncmVnYXRlKSAtLS0tCiAgICBmbGFncyA9IFtdCiAgICBpZiBsaXZlbmVzc1sic3RhdHVzIl0gPT0gImZhaWwiOgogICAgICAgIGZsYWdzLmFwcGVuZCgidW5yZWFjaGFibGU6IGVuZHBvaW50IGRpZCBub3QgcmVzcG9uZCB0byBHRVQgb3IgUE9TVCIpCiAgICBpZiBjaGFsbGVuZ2VfY2hlY2tbInN0YXR1cyJdID09ICJmYWlsIjoKICAgICAgICBmbGFncy5hcHBlbmQoIm5vIHBhcnNlYWJsZSA0MDIgY2hhbGxlbmdlIOKAlCBjYW5ub3QgdmVyaWZ5IHBheW1lbnQgdGVybXMiKQogICAgaWYgcGFyc2VkLnNjaGVtZSA9PSAiaHR0cCI6CiAgICAgICAgZmxhZ3MuYXBwZW5kKCJwbGFpbiBIVFRQIOKAlCBwYXltZW50IHRlcm1zIGNvdWxkIGJlIHRhbXBlcmVkIHdpdGggaW4gdHJhbnNpdCIpCiAgICByZXFfaG9zdCA9IChjaGFsbGVuZ2Ugb3Ige30pLmdldCgicmVxdWVzdGVkX2hvc3QiKSBvciAiIgogICAgZmluX2hvc3QgPSAoY2hhbGxlbmdlIG9yIHt9KS5nZXQoImhvc3QiKSBvciAiIgogICAgaWYgcmVxX2hvc3QgYW5kIGZpbl9ob3N0IGFuZCByZXFfaG9zdCAhPSBmaW5faG9zdDoKICAgICAgICBmbGFncy5hcHBlbmQoZiJyZWRpcmVjdHMgZnJvbSB7cmVxX2hvc3R9IHRvIHtmaW5faG9zdH0g4oCUIGxpc3RpbmcgY292ZXJzIHRoZSByZXF1ZXN0ZWQgaG9zdCwgbm90IHRoZSBmaW5hbCBvbmUiKQogICAgaWYgY2hhbGxlbmdlIGFuZCBub3QgcGF5X3RvOgogICAgICAgIGZsYWdzLmFwcGVuZCgibGl2ZSA0MDIgaGFzIG5vIHBheVRvIGFkZHJlc3Mg4oCUIGRvIG5vdCBwYXkgaXQiKQogICAgaWYgdGVybXNfY2hlY2tbInN0YXR1cyJdID09ICJmYWlsIjoKICAgICAgICBmbGFncy5hcHBlbmQoImxpdmUgdGVybXMgbWlzbWF0Y2ggY2xhaW1lZCB0ZXJtcyIpCiAgICBpZiBub3QgYW55KChkIG9yIHt9KS5nZXQoImZvdW5kIikgZm9yIGQgaW4gZG9jc19mb3VuZC52YWx1ZXMoKSkgYW5kIGxpdmVuZXNzWyJzdGF0dXMiXSAhPSAiZmFpbCI6CiAgICAgICAgZmxhZ3MuYXBwZW5kKCJubyBkaXNjb3ZlcnkgZG9jcyAoLy53ZWxsLWtub3duL3g0MDIsIC8ud2VsbC1rbm93bi9hZ2VudC5qc29uLCAvc2tpbGwubWQgYWxsIG1pc3NpbmcpIikKICAgIGlmIGNoYWxsZW5nZSBhbmQgY2hhbGxlbmdlLmdldCgicHJpY2VfdXNkYyIpID09IDA6CiAgICAgICAgZmxhZ3MuYXBwZW5kKCJ6ZXJvIHByaWNlIG9uIGEgcGFpZCBlbmRwb2ludCDigJQgdW51c3VhbCIpCiAgICAjIFJlZC1mbGFncyBjaGVjazogZnVsbCB3ZWlnaHQgd2hlbiBjbGVhbiwgc2NhbGVkIGRvd24gcGVyIGZsYWcuCiAgICByZl9zY29yZSA9IG1heCgwLCBXRUlHSFRTWyJyZWRfZmxhZ3MiXSAtIDcgKiBsZW4oZmxhZ3MpKQogICAgcmZfc3RhdHVzID0gInBhc3MiIGlmIG5vdCBmbGFncyBlbHNlICgid2FybiIgaWYgbGVuKGZsYWdzKSA8PSAyIGVsc2UgImZhaWwiKQogICAgZXZpZGVuY2VfYmFua1sicmVkX2ZsYWdzIl0gPSB7ImZsYWdzIjogZmxhZ3N9CiAgICByZWRmbGFnX2NoZWNrID0gewogICAgICAgICJjaGVjayI6ICJyZWRfZmxhZ3MiLAogICAgICAgICJ3ZWlnaHQiOiBXRUlHSFRTWyJyZWRfZmxhZ3MiXSwKICAgICAgICAic3RhdHVzIjogcmZfc3RhdHVzLAogICAgICAgICJkZXRhaWwiOiAibm8gcmVkIGZsYWdzIiBpZiBub3QgZmxhZ3MgZWxzZSBmIntsZW4oZmxhZ3MpfSByZWQgZmxhZyhzKTogIiArICI7ICIuam9pbihmbGFncyksCiAgICAgICAgImV2aWRlbmNlIjogZXZpZGVuY2VfYmFua1sicmVkX2ZsYWdzIl0sCiAgICAgICAgInNjb3JlIjogcmZfc2NvcmUsCiAgICB9CgogICAgY2hlY2tzID0gW2xpdmVuZXNzLCBjaGFsbGVuZ2VfY2hlY2ssIHRlcm1zX2NoZWNrLCBkaXNjb3ZlcnlfY2hlY2ssCiAgICAgICAgICAgICAgaWRlbnRpdHlfY2hlY2ssIHJlZGZsYWdfY2hlY2tdCiAgICBzY29yZSA9IG1heCgwLCBtaW4oMTAwLCBzdW0oY1sic2NvcmUiXSBmb3IgYyBpbiBjaGVja3MpKSkKICAgIGlmIHNjb3JlID49IDgwOgogICAgICAgIHZlcmRpY3QgPSAiVFJVU1QiCiAgICBlbGlmIHNjb3JlID49IDUwOgogICAgICAgIHZlcmRpY3QgPSAiQ0FVVElPTiIKICAgIGVsc2U6CiAgICAgICAgdmVyZGljdCA9ICJETyBOT1QgUEFZIgoKICAgIHJldHVybiBUcnVzdFJlcG9ydCgKICAgICAgICB1cmw9dXJsLCByZXF1ZXN0ZWRfdXJsPXRhcmdldF91cmwsIHNjb3JlPXNjb3JlLCB2ZXJkaWN0PXZlcmRpY3QsCiAgICAgICAgY2hlY2tzPWNoZWNrcywgZXZpZGVuY2VfYmFuaz1ldmlkZW5jZV9iYW5rLAogICAgICAgIGVsYXBzZWRfbXM9aW50KCh0aW1lLnRpbWUoKSAtIHQwKSAqIDEwMDApKQoKCmNsYXNzIFRydXN0UmVwb3J0OgogICAgIiIiVGhlIHRlYXJkb3duIHJlc3VsdC4gZnJlZV9zdW1tYXJ5KCkgaXMgYWx3YXlzIGZyZWUgKGRlbGl2ZXJ5LWZpcnN0KTsKICAgIGZ1bGxfcmVwb3J0KCkgaXMgdGhlIHBhaWQgdGllciAocGVyLWNoZWNrIGV2aWRlbmNlKS4iIiIKCiAgICBkZWYgX19pbml0X18oc2VsZiwgdXJsLCByZXF1ZXN0ZWRfdXJsLCBzY29yZSwgdmVyZGljdCwgY2hlY2tzLCBldmlkZW5jZV9iYW5rLAogICAgICAgICAgICAgICAgIGVsYXBzZWRfbXMpOgogICAgICAgIHNlbGYudXJsID0gdXJsCiAgICAgICAgc2VsZi5yZXF1ZXN0ZWRfdXJsID0gcmVxdWVzdGVkX3VybAogICAgICAgIHNlbGYuc2NvcmUgPSBzY29yZQogICAgICAgIHNlbGYudmVyZGljdCA9IHZlcmRpY3QKICAgICAgICBzZWxmLmNoZWNrcyA9IGNoZWNrcwogICAgICAgIHNlbGYuZXZpZGVuY2VfYmFuayA9IGV2aWRlbmNlX2JhbmsKICAgICAgICBzZWxmLmVsYXBzZWRfbXMgPSBlbGFwc2VkX21zCiAgICAgICAgc2VsZi5jaGVja2VkX2F0ID0gdGltZS5zdHJmdGltZSgiJVktJW0tJWRUJUg6JU06JVMuMDAwMDAwKzAwOjAwIiwgdGltZS5nbXRpbWUoKSkKCiAgICBkZWYgZnJlZV9zdW1tYXJ5KHNlbGYpOgogICAgICAgIHJldHVybiB7CiAgICAgICAgICAgICJzZXJ2aWNlIjogImFnZW50LXRydXN0LXRlYXJkb3duIiwKICAgICAgICAgICAgInVybCI6IHNlbGYucmVxdWVzdGVkX3VybCwKICAgICAgICAgICAgImZpbmFsX3VybCI6IHNlbGYudXJsLAogICAgICAgICAgICAidmVyZGljdCI6IHNlbGYudmVyZGljdCwKICAgICAgICAgICAgInRydXN0X3Njb3JlIjogc2VsZi5zY29yZSwKICAgICAgICAgICAgImNoZWNrcyI6IFsKICAgICAgICAgICAgICAgIHsiY2hlY2siOiBjWyJjaGVjayJdLCAic3RhdHVzIjogY1sic3RhdHVzIl0sICJkZXRhaWwiOiBjWyJkZXRhaWwiXX0KICAgICAgICAgICAgICAgIGZvciBjIGluIHNlbGYuY2hlY2tzCiAgICAgICAgICAgIF0sCiAgICAgICAgICAgICJjaGVja2VkX2F0Ijogc2VsZi5jaGVja2VkX2F0LAogICAgICAgICAgICAiZWxhcHNlZF9tcyI6IHNlbGYuZWxhcHNlZF9tcywKICAgICAgICAgICAgImdlbmVyYXRlZF9ieSI6ICJDaXRydXMgQ29hc3QgQUkg4oCUIEFnZW50IFRydXN0IFRlYXJkb3duIChkZXRlcm1pbmlzdGljLCBubyBMTE0pIiwKICAgICAgICAgICAgImZ1bGxfcmVwb3J0IjogewogICAgICAgICAgICAgICAgImF2YWlsYWJsZSI6IFRydWUsCiAgICAgICAgICAgICAgICAicHJpY2VfdXNkYyI6IDAuNTAsCiAgICAgICAgICAgICAgICAiaG93IjogIlBPU1QgdGhlIHNhbWUgcmVxdWVzdCB3aXRoIGFuIFgtUEFZTUVOVCBoZWFkZXIgKHg0MDIsICQwLjUwIFVTREMgb24gQmFzZSkiLAogICAgICAgICAgICAgICAgImluY2x1ZGVzIjogWyJyYXcgNDAyIGNoYWxsZW5nZSIsICJwcm9iZSB0aW1pbmdzICsgcmVkaXJlY3QgY2hhaW4iLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICJkaXNjb3ZlcnkgZG9jIGNvbnRlbnRzIiwgInRlcm1zIGZpZWxkLWJ5LWZpZWxkIGRpZmYiLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICJwYXlUbyBoaXN0b3J5IGhpdHMiXSwKICAgICAgICAgICAgfSwKICAgICAgICB9CgogICAgZGVmIGZ1bGxfcmVwb3J0KHNlbGYpOgogICAgICAgIHN1bW1hcnkgPSBzZWxmLmZyZWVfc3VtbWFyeSgpCiAgICAgICAgc3VtbWFyeVsiZXZpZGVuY2UiXSA9IHsKICAgICAgICAgICAgY1siY2hlY2siXTogY1siZXZpZGVuY2UiXSBmb3IgYyBpbiBzZWxmLmNoZWNrcwogICAgICAgIH0KICAgICAgICBzdW1tYXJ5WyJ3ZWlnaHRzIl0gPSBXRUlHSFRTCiAgICAgICAgc3VtbWFyeVsiY2hlY2tfc2NvcmVzIl0gPSB7Y1siY2hlY2siXTogY1sic2NvcmUiXSBmb3IgYyBpbiBzZWxmLmNoZWNrc30KICAgICAgICByZXR1cm4gc3VtbWFyeQo=
+"""
+Citrus Coast AI — Agent Trust Teardown engine.
+
+Repositioned 2026-10-18 (Mykel): from "website health audit for local
+businesses" to "deep trust report on an x402 agent endpoint." The ideology
+is verify-before-you-pay, delivery-first: the verdict + score are always
+free; the full per-check evidence is the $0.50 paid tier.
+
+Input: an x402 endpoint URL (+ optional claimed terms to audit against).
+Output: 6 weighted checks -> 0-100 trust score -> TRUST / CAUTION / DO NOT PAY.
+
+$0 marginal cost per teardown: deterministic checks only, no LLM inference.
+The check never pays the target endpoint and never signs anything.
+"""
+import time
+from urllib.parse import urlparse
+
+USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+NETWORK_CAIP2 = "eip155:8453"
+NETWORK_LABELS = ("eip155:8453", "base")
+
+# Weights must sum to 100.
+WEIGHTS = {
+    "liveness": 20,
+    "challenge_parse": 20,
+    "terms_audit": 15,
+    "discovery_docs": 15,
+    "identity_history": 10,
+    "red_flags": 20,
+}
+
+
+def _server_helpers():
+    """Lazy import of the fetch/parse helpers from server.py (avoids a
+    circular import at module load: server.py imports this module at top
+    level, so server is only imported here at call time)."""
+    import server as _s
+    return _s
+
+
+def _check(name, weight, status, detail, evidence=None):
+    """One check result. status: pass | warn | fail. Score contribution:
+    pass = full weight, warn = half weight, fail = 0."""
+    return {
+        "check": name,
+        "weight": weight,
+        "status": status,
+        "detail": detail,
+        "evidence": evidence or {},
+        "score": weight if status == "pass" else (weight // 2 if status == "warn" else 0),
+    }
+
+
+def _normalize_url(url):
+    url = (url or "").strip()
+    if url and not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url
+    return url
+
+
+def run_trust_teardown(target_url, claimed=None):
+    """Run the full trust teardown. claimed is an optional dict with any of
+    {payTo, price_usdc, asset, network} the requester believes the endpoint
+    advertises — we diff the live 402 against it. Returns a TrustReport."""
+    S = _server_helpers()
+    claimed = claimed or {}
+    url = _normalize_url(target_url)
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    t0 = time.time()
+    evidence_bank = {}
+
+    # ---- 1. LIVENESS (GET + POST probe) ----
+    get_status, post_status, get_ms, post_ms = None, None, None, None
+    redirect_chain = []
+    if not host or S._host_blocked(host):
+        liveness = _check("liveness", WEIGHTS["liveness"], "fail",
+                          "target host is missing or blocked — refusing to probe",
+                          {"host": host})
+    else:
+        try:
+            with S._check_http_client(host) as c:
+                t = time.time()
+                try:
+                    r = c.get(url)
+                    get_status, get_ms = r.status_code, int((time.time() - t) * 1000)
+                    redirect_chain = [str(h.url) for h in r.history] + [str(r.url)]
+                except Exception as e:
+                    get_status = f"error: {e}"
+                t = time.time()
+                try:
+                    r = c.post(url, json={})
+                    post_status, post_ms = r.status_code, int((time.time() - t) * 1000)
+                except Exception as e:
+                    post_status = f"error: {e}"
+        except Exception as e:
+            get_status = f"client error: {e}"
+        evidence_bank["probes"] = {
+            "get_status": get_status, "get_ms": get_ms,
+            "post_status": post_status, "post_ms": post_ms,
+            "redirect_chain": redirect_chain,
+        }
+        ok_get = isinstance(get_status, int)
+        ok_post = isinstance(post_status, int)
+        if ok_get and ok_post:
+            liveness = _check("liveness", WEIGHTS["liveness"], "pass",
+                              f"endpoint responds (GET {get_status} in {get_ms}ms, "
+                              f"POST {post_status} in {post_ms}ms)",
+                              evidence_bank["probes"])
+        elif ok_get or ok_post:
+            liveness = _check("liveness", WEIGHTS["liveness"], "warn",
+                              f"endpoint partially responds (GET {get_status}, POST {post_status})",
+                              evidence_bank["probes"])
+        else:
+            liveness = _check("liveness", WEIGHTS["liveness"], "fail",
+                              f"endpoint unreachable (GET {get_status}, POST {post_status})",
+                              evidence_bank["probes"])
+
+    # ---- 2. CHALLENGE PARSE (live 402) ----
+    challenge, chal_warnings, chal_detail = None, [], ""
+    if liveness["status"] != "fail":
+        challenge, chal_warnings, chal_detail = S._fetch_live_402(url)
+    if challenge:
+        missing = [k for k in ("payTo", "asset", "network", "scheme")
+                   if not challenge.get(k)]
+        evidence_bank["challenge"] = {
+            "parsed": challenge,
+            "warnings": chal_warnings,
+            "raw_host": challenge.get("host"),
+            "final_url": challenge.get("final_url"),
+        }
+        if not missing:
+            challenge_check = _check(
+                "challenge_parse", WEIGHTS["challenge_parse"], "pass",
+                f"live 402 parsed: {challenge['price_usdc']} USDC to "
+                f"{challenge['payTo'][:10]}… on {challenge['network']}",
+                evidence_bank["challenge"])
+        else:
+            challenge_check = _check(
+                "challenge_parse", WEIGHTS["challenge_parse"], "warn",
+                f"402 parsed but missing fields: {', '.join(missing)}",
+                evidence_bank["challenge"])
+    else:
+        evidence_bank["challenge"] = {"parsed": None, "warnings": chal_warnings,
+                                      "detail": chal_detail}
+        challenge_check = _check(
+            "challenge_parse", WEIGHTS["challenge_parse"], "fail",
+            f"no parseable 402 challenge ({chal_detail})",
+            evidence_bank["challenge"])
+
+    # ---- 3. TERMS AUDIT ----
+    terms_notes = []
+    terms_status = "pass"
+    if challenge:
+        price = challenge.get("price_usdc")
+        if price == 0:
+            terms_notes.append("price is zero — unusual for a paid endpoint")
+            terms_status = "warn"
+        asset = (challenge.get("asset") or "").lower()
+        if asset and asset != USDC_BASE.lower():
+            terms_notes.append(f"asset is not Base USDC ({challenge.get('asset')})")
+            terms_status = "warn"
+        net = (challenge.get("network") or "").lower()
+        if net and net not in NETWORK_LABELS:
+            terms_notes.append(f"network is {challenge.get('network')}, not Base")
+            terms_status = "warn"
+        if (challenge.get("scheme") or "").lower() != "exact":
+            terms_notes.append(f"scheme is {challenge.get('scheme')}, not 'exact'")
+            terms_status = "warn"
+        # Diff against claimed terms, when the requester supplied them.
+        for field in ("payTo", "asset", "network"):
+            claimed_v = claimed.get(field)
+            live_v = challenge.get(field)
+            if claimed_v and live_v and str(claimed_v).lower() != str(live_v).lower():
+                terms_notes.append(f"claimed {field} ({claimed_v}) != live {field} ({live_v})")
+                terms_status = "fail"
+        claimed_price = claimed.get("price_usdc")
+        if claimed_price is not None and price is not None:
+            try:
+                if abs(float(claimed_price) - float(price)) > 1e-9:
+                    terms_notes.append(f"claimed price ({claimed_price}) != live price ({price})")
+                    terms_status = "fail"
+            except (TypeError, ValueError):
+                pass
+        if not terms_notes:
+            terms_notes.append("terms sane; no claimed terms to diff"
+                               if not claimed else "live terms match claimed terms")
+    else:
+        terms_status = "fail"
+        terms_notes.append("no live challenge to audit")
+    evidence_bank["terms"] = {"notes": terms_notes, "claimed": claimed}
+    terms_check = _check("terms_audit", WEIGHTS["terms_audit"], terms_status,
+                         "; ".join(terms_notes), evidence_bank["terms"])
+
+    # ---- 4. DISCOVERY DOCS ----
+    docs_notes = []
+    docs_found = {}
+    docs_status = "warn"  # no docs at all is a warn, not a fail
+    if liveness["status"] != "fail":
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        try:
+            with S._check_http_client(host) as c:
+                for path in ("/.well-known/x402", "/.well-known/agent.json", "/skill.md"):
+                    try:
+                        r = c.get(origin + path)
+                        found = r.status_code == 200
+                        docs_found[path] = {
+                            "status": r.status_code,
+                            "found": found,
+                            "bytes": len(r.content) if found else 0,
+                            "content_truncated": (r.text[:2000] if found else None),
+                        }
+                        if found:
+                            docs_notes.append(f"{path} present")
+                    except Exception as e:
+                        docs_found[path] = {"found": False, "error": str(e)}
+            # Diff the x402 listing against the live challenge.
+            if docs_found.get("/.well-known/x402", {}).get("found") and challenge:
+                listing_match, listing_warnings = S._fetch_listing(url, challenge)
+                evidence_bank["discovery"] = {"docs": docs_found,
+                                              "listing_match": listing_match,
+                                              "listing_warnings": listing_warnings}
+                if listing_match == "matched":
+                    docs_notes.append("public listing matches live 402")
+                    docs_status = "pass"
+                elif listing_match == "mismatched":
+                    docs_notes.append("public listing MISMATCHES live 402: "
+                                      + "; ".join(listing_warnings))
+                    docs_status = "fail"
+                else:
+                    docs_notes.append(f"listing {listing_match}: "
+                                      + "; ".join(listing_warnings))
+                    docs_status = "warn"
+            else:
+                evidence_bank["discovery"] = {"docs": docs_found}
+                if not any(d.get("found") for d in docs_found.values()):
+                    docs_notes.append("no discovery docs found (/.well-known/x402, "
+                                      "/.well-known/agent.json, /skill.md all missing)")
+        except Exception as e:
+            docs_notes.append(f"discovery fetch failed: {e}")
+            evidence_bank["discovery"] = {"error": str(e)}
+    else:
+        docs_notes.append("endpoint unreachable — discovery docs not checked")
+        evidence_bank["discovery"] = {"skipped": True}
+    discovery_check = _check("discovery_docs", WEIGHTS["discovery_docs"], docs_status,
+                             "; ".join(docs_notes) if docs_notes else "no notes",
+                             evidence_bank["discovery"])
+
+    # ---- 5. IDENTITY / HISTORY ----
+    id_notes = []
+    id_status = "warn"
+    pay_to = (challenge or {}).get("payTo") or ""
+    history_hits = []
+    if pay_to:
+        # Known operator: our own venture wallet.
+        if pay_to.lower() == S.PAY_TO.lower():
+            id_notes.append("payTo is the Citrus Coast AI venture wallet (our own endpoint)")
+            id_status = "pass"
+        else:
+            # Best-effort local history: sell-side receipts on this host.
+            try:
+                import json as _json
+                import os as _os
+                receipts_path = _os.path.join(
+                    _os.path.dirname(_os.path.abspath(S.__file__)), "sell_receipts.jsonl")
+                if _os.path.exists(receipts_path):
+                    with open(receipts_path, encoding="utf-8") as f:
+                        for line in f:
+                            try:
+                                row = _json.loads(line)
+                            except Exception:
+                                continue
+                            if (row.get("pay_to") or "").lower() == pay_to.lower():
+                                history_hits.append({
+                                    "txid": row.get("txid"),
+                                    "amount": row.get("amount"),
+                                    "resource": row.get("resource"),
+                                    "observed_at": row.get("observed_at"),
+                                })
+            except Exception:
+                pass
+            if history_hits:
+                id_notes.append(f"payTo seen in {len(history_hits)} local sell receipt(s)")
+                id_status = "pass"
+            else:
+                id_notes.append("payTo has no history in our records — not proof of "
+                                "malice, but no track record either")
+    else:
+        id_notes.append("no payTo to check (no live challenge)")
+        id_status = "fail"
+    evidence_bank["identity"] = {"payTo": pay_to, "history_hits": history_hits,
+                                 "notes": id_notes}
+    identity_check = _check("identity_history", WEIGHTS["identity_history"], id_status,
+                            "; ".join(id_notes), evidence_bank["identity"])
+
+    # ---- 6. RED FLAGS (aggregate) ----
+    flags = []
+    if liveness["status"] == "fail":
+        flags.append("unreachable: endpoint did not respond to GET or POST")
+    if challenge_check["status"] == "fail":
+        flags.append("no parseable 402 challenge — cannot verify payment terms")
+    if parsed.scheme == "http":
+        flags.append("plain HTTP — payment terms could be tampered with in transit")
+    req_host = (challenge or {}).get("requested_host") or ""
+    fin_host = (challenge or {}).get("host") or ""
+    if req_host and fin_host and req_host != fin_host:
+        flags.append(f"redirects from {req_host} to {fin_host} — listing covers the requested host, not the final one")
+    if challenge and not pay_to:
+        flags.append("live 402 has no payTo address — do not pay it")
+    if terms_check["status"] == "fail":
+        flags.append("live terms mismatch claimed terms")
+    if not any((d or {}).get("found") for d in docs_found.values()) and liveness["status"] != "fail":
+        flags.append("no discovery docs (/.well-known/x402, /.well-known/agent.json, /skill.md all missing)")
+    if challenge and challenge.get("price_usdc") == 0:
+        flags.append("zero price on a paid endpoint — unusual")
+    # Red-flags check: full weight when clean, scaled down per flag.
+    rf_score = max(0, WEIGHTS["red_flags"] - 7 * len(flags))
+    rf_status = "pass" if not flags else ("warn" if len(flags) <= 2 else "fail")
+    evidence_bank["red_flags"] = {"flags": flags}
+    redflag_check = {
+        "check": "red_flags",
+        "weight": WEIGHTS["red_flags"],
+        "status": rf_status,
+        "detail": "no red flags" if not flags else f"{len(flags)} red flag(s): " + "; ".join(flags),
+        "evidence": evidence_bank["red_flags"],
+        "score": rf_score,
+    }
+
+    checks = [liveness, challenge_check, terms_check, discovery_check,
+              identity_check, redflag_check]
+    score = max(0, min(100, sum(c["score"] for c in checks)))
+    if score >= 80:
+        verdict = "TRUST"
+    elif score >= 50:
+        verdict = "CAUTION"
+    else:
+        verdict = "DO NOT PAY"
+
+    return TrustReport(
+        url=url, requested_url=target_url, score=score, verdict=verdict,
+        checks=checks, evidence_bank=evidence_bank,
+        elapsed_ms=int((time.time() - t0) * 1000))
+
+
+class TrustReport:
+    """The teardown result. free_summary() is always free (delivery-first);
+    full_report() is the paid tier (per-check evidence)."""
+
+    def __init__(self, url, requested_url, score, verdict, checks, evidence_bank,
+                 elapsed_ms):
+        self.url = url
+        self.requested_url = requested_url
+        self.score = score
+        self.verdict = verdict
+        self.checks = checks
+        self.evidence_bank = evidence_bank
+        self.elapsed_ms = elapsed_ms
+        self.checked_at = time.strftime("%Y-%m-%dT%H:%M:%S.000000+00:00", time.gmtime())
+
+    def free_summary(self):
+        return {
+            "service": "agent-trust-teardown",
+            "url": self.requested_url,
+            "final_url": self.url,
+            "verdict": self.verdict,
+            "trust_score": self.score,
+            "checks": [
+                {"check": c["check"], "status": c["status"], "detail": c["detail"]}
+                for c in self.checks
+            ],
+            "checked_at": self.checked_at,
+            "elapsed_ms": self.elapsed_ms,
+            "generated_by": "Citrus Coast AI — Agent Trust Teardown (deterministic, no LLM)",
+            "full_report": {
+                "available": True,
+                "price_usdc": 0.50,
+                "how": "POST the same request with an X-PAYMENT header (x402, $0.50 USDC on Base)",
+                "includes": ["raw 402 challenge", "probe timings + redirect chain",
+                             "discovery doc contents", "terms field-by-field diff",
+                             "payTo history hits"],
+            },
+        }
+
+    def full_report(self):
+        summary = self.free_summary()
+        summary["evidence"] = {
+            c["check"]: c["evidence"] for c in self.checks
+        }
+        summary["weights"] = WEIGHTS
+        summary["check_scores"] = {c["check"]: c["score"] for c in self.checks}
+        return summary
