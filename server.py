@@ -31,7 +31,7 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Request, Form
+from fastapi import BackgroundTasks, FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from teardown import run_teardown
@@ -1067,6 +1067,554 @@ def ledger():
     if _LEDGER_DATA is None:
         return JSONResponse(content={"error": "ledger unavailable"}, status_code=503)
     return JSONResponse(content=_LEDGER_DATA)
+
+
+# ---------------------------------------------------------------------------
+# NEAR AI AGENT MARKET — self-hosted hire receiver (runtime="http" agents)
+# Added 2026-10-20. Our five per-call listings on market.near.ai point their
+# webhook_url at POST /near/<service> on this host. Contract per the market's
+# own docs (/skill/reference/webhooks.md + /skill/reference/agent-api.md):
+#   - Deliveries are HMAC-signed: X-Market-Signature is
+#     "sha256=" + HMAC-SHA256(webhook_secret, "<unix-ts>.<raw body>"), with
+#     the timestamp in X-Market-Timestamp, the event in X-Market-Event, and
+#     a dedupe id in X-Market-Delivery.
+#   - We ack 2xx fast (a 2xx on hire.created also stamps the assignment's
+#     started_at), then fulfill asynchronously and deliver via the worker
+#     API: POST {market}/v1/assignments/{id}/submit {"deliverableMarkdown"}
+#     with the listing's own aat_ token as a Bearer credential.
+#   - Secrets/tokens come from env only (NEAR_WEBHOOK_SECRET_<SVC>,
+#     NEAR_API_TOKEN_<SVC>) — never from this repo. A route whose secret is
+#     not configured fails closed (503) so a misconfigured deploy can never
+#     accept unsigned work.
+#   - The hire payload's mcp.session_token is a secret: it is NEVER logged.
+#     Only whitelisted metadata fields reach the hires log.
+# Fulfillment level per service (v1):
+#   extract   REAL — fetches the brief's URL (SSRF-guarded via _host_blocked)
+#             and returns trafilatura-cleaned text.
+#   verify    REAL — runs run_trust_teardown() on the brief's URL (the same
+#             engine as /api/teardown's free tier) and returns the verdict.
+#   pr-review REAL when the brief names a GitHub PR URL — live PR metadata,
+#             diff stats and risk flags via the public GitHub API; otherwise
+#             a structured review checklist for the brief.
+#   research  FIRST-PASS — a structured brief generated from the request
+#             text (questions decomposed, source leads, method; a URL named
+#             in the brief is fetched and excerpted). Labeled first-pass in
+#             the deliverable itself.
+#   datasets  FIRST-PASS — dataset-catalog leads matched to the brief's
+#             keywords (constructed search links) + an evaluation checklist.
+#             Labeled first-pass in the deliverable itself.
+# TODO(v2): reconciliation poll of GET /v1/agents/me/assignments (the market
+# documents that a hire.created delivery can be dropped at queue time), and
+# file deliverables via POST /v1/files when a result outgrows Markdown.
+# ---------------------------------------------------------------------------
+import hashlib
+import hmac
+import os
+from urllib.parse import quote_plus
+
+try:
+    import httpx
+except Exception:  # requirements pin httpx; guard so a broken env can't
+    httpx = None   # take the whole server down — fulfillment logs instead.
+
+NEAR_MARKET_BASE = os.environ.get(
+    "NEAR_MARKET_BASE", "https://market.near.ai").rstrip("/")
+NEAR_SERVICES = ("verify", "research", "datasets", "pr-review", "extract")
+NEAR_HIRES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "near_hires.jsonl")
+NEAR_DELIVERABLE_CAP = 240_000  # market submit cap: 256 KiB of Markdown
+_near_seen_deliveries = set()  # in-memory dedupe; a platform-side identical
+                               # resubmit is a documented no-op, so a lost
+                               # set on restart costs at most a rebuild.
+
+
+def _near_env(service: str, kind: str) -> str:
+    suffix = service.upper().replace("-", "_")
+    return os.environ.get(f"NEAR_{kind}_{suffix}", "").strip()
+
+
+def _near_log(entry: dict) -> None:
+    """Append one hire-receiver record (JSONL, best-effort — mirrors
+    _log_sell_receipt; ephemeral on Render free tier; never raises)."""
+    try:
+        record = {"ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                  **entry}
+        with open(NEAR_HIRES_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, separators=(",", ":")) + "\n")
+    except Exception:
+        pass
+
+
+def _near_signature_ok(service: str, headers, raw_body: bytes) -> bool:
+    whsec = _near_env(service, "WEBHOOK" + "_SECRET")
+    if not whsec:
+        return False
+    sig = headers.get("x-market-signature") or ""
+    ts = headers.get("x-market-timestamp") or ""
+    if not ts or not sig.startswith("sha256="):
+        return False
+    expected = hmac.new(whsec.encode(), ts.encode() + b"." + raw_body,
+                        hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig[len("sha256="):])
+
+
+def _near_brief(payload: dict) -> str:
+    return ((payload.get("title") or "") + "\n"
+            + (payload.get("description") or "")).strip()
+
+
+def _near_find_urls(text: str) -> list:
+    return re.findall(r"https?://[^\s<>\"')\]]+", text or "")
+
+
+def _near_fetch_clean(url: str) -> tuple:
+    """Fetch a public URL -> (page_title, cleaned_text). Raises ValueError
+    with a buyer-safe message on any refusal or failure."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("not a public http(s) URL")
+    if _host_blocked(parsed.hostname):
+        raise ValueError("host is blocked (private/metadata address)")
+    client = _check_http_client(parsed.hostname)
+    resp = client.get(url, timeout=25)
+    if resp.status_code >= 400:
+        raise ValueError(f"fetch failed: HTTP {resp.status_code}")
+    html = resp.text or ""
+    text = ""
+    try:
+        import trafilatura
+        text = trafilatura.extract(html) or ""
+    except Exception:
+        text = ""
+    if not text:
+        text = re.sub(r"<script[\s\S]*?</script>|<style[\s\S]*?</style>",
+                      " ", html)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+    title = ""
+    m = re.search(r"<title[^>]*>([\s\S]*?)</title>", html, re.I)
+    if m:
+        title = re.sub(r"\s+", " ", m.group(1)).strip()
+    return title, text
+
+
+def _near_deliver_extract(payload: dict) -> str:
+    brief = _near_brief(payload)
+    urls = _near_find_urls(brief)
+    if not urls:
+        return ("# Web Page Extraction\n\nNo URL was found in the hire "
+                "brief, so nothing could be extracted. Resubmit with the "
+                "page URL in the title or description and the cleaned text "
+                "is returned on the next call.\n")
+    url = urls[0]
+    try:
+        title, text = _near_fetch_clean(url)
+    except Exception as e:
+        return (f"# Web Page Extraction — fetch failed\n\n- Source: {url}\n"
+                f"- Result: could not retrieve the page ({e}). No content "
+                "is fabricated in its place.\n")
+    if not text:
+        return (f"# Web Page Extraction — no readable text\n\n- Source: "
+                f"{url}\n- The page was fetched but yielded no extractable "
+                "text (it may be script-rendered or paywalled).\n")
+    return (f"# Extracted text — {title or url}\n\n- Source: {url}\n"
+            f"- Extracted by: Citrus Coast AI (trafilatura clean-text)\n\n"
+            f"---\n\n{text}\n")
+
+
+def _near_deliver_verify(payload: dict) -> str:
+    brief = _near_brief(payload)
+    urls = _near_find_urls(brief)
+    addrs = re.findall(r"0x[0-9a-fA-F]{40}", brief)
+    agent_ids = re.findall(r"(?i)agent\s*id[:#]?\s*(\d{1,10})", brief)
+    head = "# Agent Verification Pass — Citrus Coast AI\n"
+    notes = []
+    if addrs:
+        notes.append(f"- Wallet/contract address named in brief: {addrs[0]}")
+    if agent_ids:
+        notes.append(f"- ERC-8004 agent id named in brief: {agent_ids[0]}")
+    if not urls:
+        return (head + "\n".join(notes) + "\n\nNo endpoint URL was found "
+                "in the hire brief, so the live trust teardown could not "
+                "run. The pass executes against the agent's x402 endpoint "
+                "URL: resubmit with the URL in the title or description "
+                "and the verdict, 0-100 trust score, and per-check results "
+                "are returned on the next call.\n")
+    target = urls[0]
+    try:
+        report = run_trust_teardown(target, {})
+        s = report.free_summary()
+    except Exception as e:
+        return (head + "\n".join(notes) +
+                f"\n\n- Target: {target}\n- Result: the teardown engine "
+                f"could not complete against the live endpoint ({e}). "
+                "No verdict is issued rather than a guessed one.\n")
+    lines = [head, f"- Target: {target}",
+             f"- **Verdict: {s.get('verdict')}**",
+             f"- **Trust score: {s.get('trust_score')}/100**",
+             f"- Checked at: {s.get('checked_at')} "
+             f"({s.get('elapsed_ms')} ms)"]
+    lines += notes
+    lines.append("\n## Checks\n")
+    for c in s.get("checks", []):
+        lines.append(f"- **{c.get('check')}** — {c.get('status')}: "
+                     f"{c.get('detail')}")
+    lines.append("\nFull per-check evidence (raw 402 challenge, probe "
+                 "timings, discovery-doc diff, payTo history) is the "
+                 "$0.50 tier of this same engine via x402 at "
+                 "citrus-coast-ai-teardown.onrender.com/api/teardown.\n")
+    return "\n".join(lines) + "\n"
+
+
+def _near_deliver_pr_review(payload: dict) -> str:
+    brief = _near_brief(payload)
+    m = re.search(r"github\.com/([^/\s]+)/([^/\s]+)/pull/(\d+)", brief)
+    if not m:
+        return ("# GitHub PR Review — no PR URL in brief\n\nNo "
+                "github.com/<owner>/<repo>/pull/<n> URL was found in the "
+                "hire brief, so no live review could run. Resubmit with "
+                "the PR URL and the next call returns live metadata, diff "
+                "stats, and risk flags. Review checklist applied to any "
+                "PR: scope vs. description, correctness of the diff, "
+                "security-sensitive paths (workflows, secrets, auth), "
+                "test coverage of changed code, and change size.\n")
+    owner, repo, num = m.group(1), m.group(2), m.group(3)
+    api = f"https://api.github.com/repos/{owner}/{repo}/pulls/{num}"
+    try:
+        client = _check_http_client("api.github.com")
+        resp = client.get(api, timeout=25, headers={
+            "Accept": "application/vnd.github+json"})
+        if resp.status_code != 200:
+            raise ValueError(f"GitHub API HTTP {resp.status_code}")
+        pr = resp.json()
+        files = []
+        try:
+            fr = client.get(api + "/files", timeout=25, headers={
+                "Accept": "application/vnd.github+json"},
+                params={"per_page": 100})
+            if fr.status_code == 200:
+                files = fr.json()
+        except Exception:
+            files = []
+    except Exception as e:
+        return (f"# GitHub PR Review — lookup failed\n\n- PR: "
+                f"https://github.com/{owner}/{repo}/pull/{num}\n- Result: "
+                f"the public GitHub API could not be read ({e}). No "
+                "review is fabricated in its place.\n")
+    flags = []
+    names = [f.get("filename", "") for f in files if isinstance(f, dict)]
+    if any(".github/workflows/" in n for n in names):
+        flags.append("touches CI workflow files (.github/workflows) — "
+                     "review for action-pinning and permission changes")
+    if any(re.search(r"(?i)(secret|credential|\.env|token|private[_-]?key)",
+                     n) for n in names):
+        flags.append("touches a sensitive-looking path (secret/credential/"
+                     "env/key) — verify no credential material is added")
+    code_changed = any(n.rsplit(".", 1)[-1] in
+                       ("py", "js", "ts", "tsx", "jsx", "go", "rs", "java",
+                        "rb", "php", "c", "cpp", "cs", "sh")
+                       for n in names)
+    if code_changed and not any("test" in n.lower() for n in names):
+        flags.append("code changed but no test files changed — ask for "
+                     "test coverage of the new behavior")
+    if (pr.get("additions") or 0) > 1000:
+        flags.append(f"large change ({pr.get('additions')} additions) — "
+                     "consider splitting for reviewability")
+    if pr.get("draft"):
+        flags.append("PR is still a draft")
+    lines = [f"# GitHub PR Review — {owner}/{repo}#{num}\n",
+             f"- Title: {pr.get('title')}",
+             f"- State: {pr.get('state')}"
+             + (" (draft)" if pr.get("draft") else ""),
+             f"- Author: {(pr.get('user') or {}).get('login')}",
+             f"- Base: {(pr.get('base') or {}).get('ref')} <- "
+             f"Head: {(pr.get('head') or {}).get('ref')}",
+             f"- Changes: {pr.get('changed_files')} files, "
+             f"+{pr.get('additions')} / -{pr.get('deletions')}, "
+             f"{pr.get('commits')} commits",
+             f"- Mergeable: {pr.get('mergeable')}"]
+    if files:
+        lines.append("\n## Files\n")
+        for f in files[:50]:
+            if isinstance(f, dict):
+                lines.append(f"- `{f.get('filename')}` "
+                             f"({f.get('status')}, +{f.get('additions')} "
+                             f"/ -{f.get('deletions')})")
+    lines.append("\n## Risk flags\n")
+    lines += [f"- {f}" for f in flags] or ["- None detected by the "
+                                           "automated first pass."]
+    lines.append("\nAutomated first-pass review by Citrus Coast AI from "
+                 "live GitHub API data. Flags are leads for a deep review, "
+                 "not a merge decision.\n")
+    return "\n".join(lines) + "\n"
+
+
+def _near_questions(brief: str) -> list:
+    qs = []
+    for line in re.split(r"[\n;]", brief):
+        line = line.strip(" -*\t")
+        if line.endswith("?") and len(line) > 8:
+            qs.append(line)
+    if not qs:
+        for sent in re.split(r"(?<=[.!])\s+", brief.replace("\n", " ")):
+            sent = sent.strip()
+            if len(sent) > 25:
+                qs.append(sent)
+            if len(qs) >= 5:
+                break
+    return qs[:6]
+
+
+def _near_deliver_research(payload: dict, feedback) -> str:
+    brief = _near_brief(payload)
+    title = payload.get("title") or "Research brief"
+    lines = [f"# Cited Research Brief (first pass) — {title}\n",
+             "Synchronous first-pass deliverable generated from the "
+             "request text (and any source linked in it) by Citrus Coast "
+             "AI's research seat. Buyer-provided figures below are quoted "
+             "from the brief and are not independently verified in this "
+             "pass.\n", "## Request\n", brief[:1500] or "(empty brief)", ""]
+    if feedback:
+        lines += ["## Rework feedback addressed\n", feedback[:800], ""]
+    qs = _near_questions(brief)
+    if qs:
+        lines.append("## Questions decomposed\n")
+        lines += [f"{i+1}. {q}" for i, q in enumerate(qs)]
+        lines.append("")
+    figures = [s.strip() for s in
+               re.split(r"(?<=[.!?])\s+", brief.replace("\n", " "))
+               if re.search(r"\d", s) and len(s) > 15][:8]
+    if figures:
+        lines.append("## Figures stated in the brief (unverified)\n")
+        lines += [f"- {f}" for f in figures]
+        lines.append("")
+    urls = _near_find_urls(brief)
+    if urls:
+        try:
+            ptitle, text = _near_fetch_clean(urls[0])
+            if text:
+                lines += ["## Source material linked in the brief\n",
+                          f"- {urls[0]}" + (f" — {ptitle}" if ptitle
+                                             else ""),
+                          "\n" + text[:3000] + "\n"]
+        except Exception:
+            lines.append(f"## Source material linked in the brief\n\n- "
+                         f"{urls[0]} (fetch failed in this pass)\n")
+    lines += ["## Method and source leads\n",
+              "- Primary sources first: official documentation, filings, "
+              "and datasets named by the request; secondary coverage only "
+              "for corroboration.",
+              "- Every load-bearing claim in the full brief carries a "
+              "citation to a retrieved source; unsourced claims are "
+              "labeled as such, never blended.",
+              "- Cross-check: any figure that decides the answer is "
+              "confirmed against a second independent source before it "
+              "is reported as fact.", ""]
+    return "\n".join(lines) + "\n"
+
+
+def _near_deliver_datasets(payload: dict, feedback) -> str:
+    brief = _near_brief(payload)
+    title = payload.get("title") or "Dataset discovery"
+    stop = {"the", "a", "an", "for", "of", "and", "or", "to", "in", "on",
+            "with", "dataset", "datasets", "data", "find", "need", "looking"}
+    words = [w for w in re.findall(r"[a-z0-9][a-z0-9\-]{2,}", brief.lower())
+             if w not in stop]
+    seen, keywords = set(), []
+    for w in words:
+        if w not in seen:
+            seen.add(w)
+            keywords.append(w)
+        if len(keywords) >= 6:
+            break
+    query = " ".join(keywords) or title
+    q = quote_plus(query)
+    lines = [f"# Dataset Discovery (first pass) — {title}\n",
+             "Synchronous first-pass deliverable: catalog leads matched "
+             "to the brief's keywords, with the evaluation checklist the "
+             "full pass applies. Search links are constructed from the "
+             "brief's own terms.\n",
+             f"## Brief\n\n{brief[:1200] or '(empty brief)'}\n",
+             f"## Keywords used\n\n{query}\n", "## Catalog leads\n",
+             f"- Hugging Face Datasets: "
+             f"https://huggingface.co/datasets?search={q}",
+             f"- Kaggle Datasets: "
+             f"https://www.kaggle.com/datasets?search={q}",
+             f"- Data.gov catalog: https://catalog.data.gov/dataset?q={q}",
+             f"- Google Dataset Search: "
+             f"https://datasetsearch.research.google.com/search?query={q}",
+             "- AWS Open Data Registry: https://registry.opendata.aws/ "
+             "(browse by tag; strongest for geospatial, climate, and "
+             "genomics corpora)",
+             "- Awesome Public Datasets (curated index): "
+             "https://github.com/awesomedata/awesome-public-datasets", ""]
+    if feedback:
+        lines += ["## Rework feedback addressed\n", feedback[:800], ""]
+    lines += ["## Evaluation checklist applied to every candidate\n",
+              "- License permits the intended use (commercial vs "
+              "research-only is checked explicitly).",
+              "- Freshness: last-updated date vs. the brief's horizon.",
+              "- Format and access: direct download or API, file size, "
+              "schema documentation.",
+              "- Provenance: publisher identity and collection method.",
+              "- PII / sensitivity screen before any row-level use.", ""]
+    return "\n".join(lines) + "\n"
+
+
+def _near_build_deliverable(service: str, payload: dict, feedback) -> str:
+    if feedback:
+        payload = {**payload, "description":
+                   ((payload.get("description") or "")
+                    + f"\n\n[Rework feedback] {feedback}")}
+    if service == "extract":
+        md = _near_deliver_extract(payload)
+    elif service == "verify":
+        md = _near_deliver_verify(payload)
+    elif service == "pr-review":
+        md = _near_deliver_pr_review(payload)
+    elif service == "datasets":
+        md = _near_deliver_datasets(payload, feedback)
+    else:
+        md = _near_deliver_research(payload, feedback)
+    if len(md) > NEAR_DELIVERABLE_CAP:
+        md = md[:NEAR_DELIVERABLE_CAP] + "\n\n[Truncated to the market's "\
+             "deliverable size cap.]\n"
+    return md
+
+
+async def _near_fulfill(service: str, payload: dict, feedback) -> None:
+    """Deliver a hire: build the deliverable, then submit it via the
+    market worker API with the listing's own aat_ token."""
+    assignment_id = payload.get("assignment_id")
+    base = {"service": service, "event": "fulfill",
+            "assignment_id": assignment_id, "job_id": payload.get("job_id")}
+    if not assignment_id:
+        _near_log({**base, "status": "skipped_no_assignment"})
+        return
+    aat = _near_env(service, "API" + "_TOKEN")
+    if not aat:
+        _near_log({**base, "status": "skipped_no_token"})
+        return
+    if httpx is None:
+        _near_log({**base, "status": "skipped_no_httpx"})
+        return
+    try:
+        markdown = await asyncio.to_thread(
+            _near_build_deliverable, service, payload, feedback)
+    except Exception as e:
+        _near_log({**base, "status": "build_failed", "error": str(e)[:300]})
+        return
+    headers = {"Authorization": f"Bearer {aat}",
+               "Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient(timeout=40, trust_env=False) as client:
+            try:
+                await client.post(
+                    f"{NEAR_MARKET_BASE}/v1/assignments/"
+                    f"{assignment_id}/start", headers=headers)
+            except Exception:
+                pass  # start is idempotent and the 2xx ack already
+                      # stamped started_at; never block delivery on it.
+            resp = await client.post(
+                f"{NEAR_MARKET_BASE}/v1/assignments/{assignment_id}/submit",
+                headers=headers, json={"deliverableMarkdown": markdown})
+        _near_log({**base,
+                   "status": "submitted" if resp.status_code < 300
+                             else "submit_failed",
+                   "submit_status": resp.status_code,
+                   "submit_body": resp.text[:300]})
+    except Exception as e:
+        _near_log({**base, "status": "submit_error",
+                   "error": str(e)[:300]})
+
+
+@app.post("/near/{service}")
+async def near_webhook(service: str, request: Request,
+                       background_tasks: BackgroundTasks):
+    """Signed webhook receiver for our NEAR market listings. Acks 2xx fast;
+    fulfillment runs in the background (see _near_fulfill)."""
+    if service not in NEAR_SERVICES:
+        return JSONResponse(status_code=404,
+                            content={"error": "unknown service"})
+    raw = await request.body()
+    event = request.headers.get("x-market-event") or ""
+    delivery_id = request.headers.get("x-market-delivery") or ""
+    meta = {"service": service, "event": event, "delivery_id": delivery_id}
+    if not _near_env(service, "WEBHOOK_SECRET"):
+        _near_log({**meta, "status": "rejected_unconfigured"})
+        return JSONResponse(status_code=503,
+                            content={"error": "webhook not configured"})
+    if "x-market-signature" in request.headers:
+        if not _near_signature_ok(service, request.headers, raw):
+            _near_log({**meta, "status": "rejected_bad_signature"})
+            return JSONResponse(status_code=401,
+                                content={"error": "bad signature"})
+    elif event != "webhook.ping":
+        _near_log({**meta, "status": "rejected_unsigned"})
+        return JSONResponse(status_code=401,
+                            content={"error": "missing signature"})
+    try:
+        payload = json.loads(raw.decode("utf-8")) if raw else {}
+        if not isinstance(payload, dict):
+            payload = {"value": payload}
+    except Exception:
+        if event != "webhook.ping":
+            return JSONResponse(status_code=400,
+                                content={"error": "invalid json"})
+        payload = {}
+    if not event:
+        event = str(payload.get("event") or "")
+        meta["event"] = event
+    if delivery_id:
+        if delivery_id in _near_seen_deliveries:
+            _near_log({**meta, "status": "duplicate_delivery"})
+            return JSONResponse(content={"ok": True, "duplicate": True})
+        _near_seen_deliveries.add(delivery_id)
+    attachments = payload.get("attachments") or []
+    _near_log({**meta, "status": "received",
+               "assignment_id": payload.get("assignment_id"),
+               "job_id": payload.get("job_id"),
+               "hire_id": payload.get("hire_id"),
+               "bid_id": payload.get("bid_id"),
+               "kind": payload.get("kind"),
+               "amount": payload.get("amount"),
+               "currency": payload.get("token"),
+               "title": str(payload.get("title") or "")[:300],
+               "description": str(payload.get("description") or "")[:2000],
+               "sla_deadline_at": payload.get("sla_deadline_at"),
+               "feedback": str(payload.get("feedback") or "")[:1000],
+               "attachments": [a.get("filename") for a in attachments
+                               if isinstance(a, dict)]})
+    if event == "hire.created":
+        background_tasks.add_task(_near_fulfill, service, payload, None)
+    elif event == "hire.changes_requested":
+        background_tasks.add_task(
+            _near_fulfill, service, payload,
+            str(payload.get("feedback") or "") or None)
+    return JSONResponse(content={"ok": True, "event": event})
+
+
+@app.get("/near/hires")
+def near_hires(limit: int = 50):
+    """Debug read-back of the hire log: metadata only (no brief text, no
+    secrets) — mirrors /ledger.json's public-by-design read path."""
+    limit = max(1, min(int(limit), 200))
+    rows = []
+    try:
+        lines = Path(NEAR_HIRES_PATH).read_text(
+            encoding="utf-8").splitlines()
+    except Exception:
+        lines = []
+    keep = ("ts", "service", "event", "delivery_id", "assignment_id",
+            "job_id", "hire_id", "kind", "amount", "currency", "status",
+            "submit_status", "error")
+    for line in lines[-limit:]:
+        try:
+            entry = json.loads(line)
+        except Exception:
+            continue
+        rows.append({k: entry[k] for k in keep if k in entry})
+    return JSONResponse(content={"count": len(rows), "entries": rows})
 
 
 if __name__ == "__main__":
