@@ -5,8 +5,15 @@ Citrus Coast AI — Model B server.
 - POST /api/teardown      x402 tier: $0.50 USDC on Base per call -> JSON report
 - POST /api/prepay-check   x402 tier: $0.001 USDC on Base per call -> pre-pay
   legitimacy verdict for a third-party x402 endpoint (live 402 vs public listing)
+- POST /api/evidence-check x402 tier: $0.50 USDC on Base per call -> Citrus Coast
+  Evidence Audit: deterministic analysis of caller-supplied URLs/source briefs
+  (dated findings, source URLs, conflicts, calibrated confidence, limitations).
+  No web-search SDK or model provider on this runtime: a naked claim/question
+  with no supplied sources returns machine-readable insufficient_sources after
+  payment — citations are never fabricated.
 - GET  /api/teardown      discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /api/prepay-check  discovery alias: identical 402 challenge for GET-only catalogs
+- GET  /api/evidence-check discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /.well-known/x402  discovery for x402 indexers
 - GET  /skill.md, /llms.txt  agent-readable docs
 - GET  /ledger.json  public machine-readable ledger (balances + receipt rows)
@@ -905,6 +912,335 @@ async def prepay_check(request: Request):
     return resp
 
 
+# ---------------------------------------------------------------------------
+# EVIDENCE CHECK — POST /api/evidence-check ($0.50 USDC on Base per call)
+# Board Decision 018-06, Citrus Coast Evidence Audit (public skill name).
+# Same x402 v1 exact-scheme flow as the other paid routes: no X-PAYMENT ->
+# 402 challenge; verify -> settle -> deliver; a failed settle returns 402,
+# never the analysis.
+#
+# SOURCE HONESTY (hard rule): this runtime declares only FastAPI, Uvicorn,
+# httpx, and multipart — no web-search SDK, no model provider, and the
+# existing checks are deterministic and zero-LLM. This route therefore
+# analyzes CALLER-SUPPLIED sources only: it fetches the URLs in `sources`
+# (or the single URL in `input` when input_type is "url"), extracts text,
+# and reports deterministic keyword-presence findings per source. It does
+# NOT verify truth, does NOT adjudicate facts, and does NOT invent sources.
+# A naked claim/question with no supplied sources, or supplied sources
+# none of which could be fetched, returns status "insufficient_sources"
+# (confidence low) AFTER payment — the buyer paid for an analysis, and the
+# truthful analysis is that no retrievable sources were available.
+# Confidence calibration: high requires >= 2 independently fetched sources
+# from distinct hosts that both mention the claim terms with no conflict
+# signal; medium requires 1 such source (or >= 2 fetched with only one
+# mentioning the terms); anything else, including any conflict signal, is
+# capped at low. One source, or two copies of one press release, never
+# counts as independent corroboration — distinct hosts are required.
+# ---------------------------------------------------------------------------
+
+EVIDENCE_AUDIT_DESCRIPTION = ("Citrus Coast Evidence Audit reviews supplied claims, questions, "
+    "URLs, or source briefs and returns dated findings, citations, conflicting evidence, "
+    "calibrated confidence, and explicit limitations. Sources are never fabricated; "
+    "unsupported requests return insufficient-evidence. It is an evidence-analysis service, "
+    "not medical, legal, or financial advice.")
+
+
+def _evidence_payment_requirements() -> dict:
+    """Same $0.50 shape as the teardown requirements (same payTo, asset,
+    network, EIP-712 domain) — the deep Evidence Audit price for this sprint.
+    No $0.10 tier: 018-06 ships one price only."""
+    return _payment_requirements()
+
+
+def _evidence_bazaar_extensions() -> dict:
+    return {
+        "bazaar": {
+            "discoverable": True,
+            "name": "Citrus Coast Evidence Audit",
+            "description": EVIDENCE_AUDIT_DESCRIPTION,
+            "input": {
+                "type": "object",
+                "properties": {
+                    "input_type": {"type": "string",
+                                   "description": "claim | question | url | brief"},
+                    "input": {"type": "string",
+                              "description": "The claim, question, URL, or brief to check"},
+                    "sources": {"type": "array", "items": {"type": "string"},
+                                "description": "Caller-supplied source URLs to fetch and analyze"},
+                    "mode": {"type": "string", "description": "deep (only mode this sprint)"},
+                },
+                "required": ["input"],
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "checked_at": {"type": "string"},
+                    "status": {"type": "string", "description": "ok | insufficient_sources"},
+                    "findings": {"type": "array"},
+                    "sources": {"type": "array"},
+                    "conflicts": {"type": "array"},
+                    "confidence": {"type": "string", "description": "low | medium | high"},
+                    "limitations": {"type": "array"},
+                    "settlement": {"type": "object",
+                                   "description": "network, tx_hash, payer (after settle)"},
+                },
+            },
+        }
+    }
+
+
+def _evidence_402_challenge() -> JSONResponse:
+    """The 402 payment challenge for the Evidence Audit, shared by POST
+    (no-payment) and the GET discovery alias."""
+    resp = JSONResponse(
+        status_code=402,
+        content={"x402Version": 1,
+                 "accepts": [_evidence_payment_requirements()],
+                 "extensions": _evidence_bazaar_extensions(),
+                 "error": "payment required: $0.50 USDC on Base for the Citrus Coast Evidence Audit deep result"},
+    )
+    resp.headers["PAYMENT-REQUIRED"] = base64.b64encode(
+        json.dumps({"x402Version": 1, "accepts": [_evidence_payment_requirements()]}).encode()).decode()
+    return resp
+
+
+_STOPWORDS = {"the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is", "are",
+              "was", "were", "it", "its", "this", "that", "with", "by", "at", "from",
+              "as", "be", "has", "have", "had", "will", "would", "can", "could",
+              "what", "when", "where", "who", "why", "how", "does", "do", "did",
+              "isnt", "isn't", "not", "no", "yes", "if", "then", "than", "so"}
+
+
+def _claim_terms(text: str) -> list:
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    seen = []
+    for w in words:
+        if len(w) >= 3 and w not in _STOPWORDS and w not in seen:
+            seen.append(w)
+    return seen[:12]
+
+
+def _strip_html(raw: bytes) -> str:
+    try:
+        text = raw.decode("utf-8", errors="ignore")
+    except Exception:
+        text = ""
+    text = re.sub(r"<script.*?</script>", " ", text, flags=re.S | re.I)
+    text = re.sub(r"<style.*?</style>", " ", text, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _fetch_evidence_source(url: str) -> dict:
+    """Fetch one caller-supplied source URL, reusing the pre-pay check's
+    HTTP client and SSRF guard. Returns a source record; never raises."""
+    norm = _normalize_target_url(url)
+    parsed = urlparse(norm)
+    host = parsed.hostname or ""
+    if not host:
+        return {"url": url, "status": "failed", "error": "source URL has no host"}
+    if _host_blocked(host):
+        return {"url": url, "status": "failed",
+                "error": "source host is blocked (private / link-local / metadata address)"}
+    try:
+        with _check_http_client(host) as c:
+            r = c.get(norm)
+    except Exception as e:
+        return {"url": url, "status": "failed", "error": f"fetch failed: {e}"}
+    if r.status_code != 200:
+        return {"url": url, "status": "failed",
+                "error": f"fetch returned HTTP {r.status_code}"}
+    text = _strip_html(r.content)
+    return {"url": str(r.url), "requested_url": url, "status": "fetched",
+            "host": urlparse(str(r.url)).hostname or host,
+            "content_length": len(text), "text": text}
+
+
+_CONFLICT_MARKERS = ("false", "incorrect", "debunked", "misleading", "hoax",
+                      "not true", "no evidence", "unproven", "disputed")
+
+
+def _run_evidence_check(input_type: str, inp: str, sources: list) -> dict:
+    """Deterministic, zero-LLM evidence analysis over caller-supplied
+    sources. Pure analysis — no payment, no signing. The POST route wraps
+    this after verify -> settle."""
+    checked_at = time.strftime("%Y-%m-%dT%H:%M:%S.000000+00:00", time.gmtime())
+    limitations = [
+        "Deterministic analysis only: fetched-source text is checked for keyword presence against the input terms; this is not semantic verification, fact adjudication, or truth certification.",
+        "Only caller-supplied sources were used: this runtime has no web-search SDK or model provider, so no independent source discovery was performed.",
+        "Not medical, legal, or financial advice.",
+    ]
+    if input_type == "url" and inp:
+        supplied = [inp]
+    elif isinstance(sources, list):
+        supplied = [s for s in sources if isinstance(s, str) and s.strip()]
+    else:
+        supplied = []
+    if not supplied:
+        return {
+            "checked_at": checked_at,
+            "status": "insufficient_sources",
+            "input_type": input_type,
+            "input": (inp or "")[:1000],
+            "findings": [],
+            "sources": [],
+            "conflicts": [],
+            "confidence": "low",
+            "reason": "No independently retrievable sources were available for this request.",
+            "limitations": limitations + [
+                "No source URLs were supplied with this request; supply URLs in 'sources' (or use input_type 'url') for a fetched analysis.",
+            ],
+        }
+    fetched = []
+    source_records = []
+    for src in supplied:
+        rec = _fetch_evidence_source(src)
+        if rec.get("status") == "fetched":
+            fetched.append(rec)
+            source_records.append({k: v for k, v in rec.items() if k != "text"})
+        else:
+            source_records.append(rec)
+    if not fetched:
+        return {
+            "checked_at": checked_at,
+            "status": "insufficient_sources",
+            "input_type": input_type,
+            "input": (inp or "")[:1000],
+            "findings": [],
+            "sources": source_records,
+            "conflicts": [],
+            "confidence": "low",
+            "reason": "No independently retrievable sources were available for this request.",
+            "limitations": limitations + [
+                "None of the supplied source URLs could be fetched successfully; see sources[] for the per-source failure.",
+            ],
+        }
+    terms = _claim_terms(inp)
+    findings = []
+    hosts_mentioning = set()
+    conflict_signals = []
+    for rec in fetched:
+        text_lower = rec["text"].lower()
+        matched = [t for t in terms if t in text_lower]
+        if matched:
+            hosts_mentioning.add((rec.get("host") or "").lower().lstrip("www."))
+        markers = [m for m in _CONFLICT_MARKERS if m in text_lower]
+        if markers and matched:
+            conflict_signals.append({
+                "source": rec["url"],
+                "signal": "keyword conflict marker present alongside claim terms: " + ", ".join(markers),
+                "note": "Keyword signal only, not an adjudication that the source contradicts the input.",
+            })
+        findings.append({
+            "source": rec["url"],
+            "host": rec.get("host"),
+            "status": "fetched",
+            "terms_found": matched,
+            "terms_checked": terms,
+            "excerpt": rec["text"][:500],
+        })
+    if conflict_signals:
+        confidence = "low"
+    elif len(hosts_mentioning) >= 2:
+        confidence = "high"
+    elif len(hosts_mentioning) == 1:
+        confidence = "medium"
+    else:
+        confidence = "low"
+        limitations.append("No fetched source mentioned the input terms; findings record fetch success only, not corroboration.")
+    return {
+        "checked_at": checked_at,
+        "status": "ok",
+        "input_type": input_type,
+        "input": (inp or "")[:1000],
+        "findings": findings,
+        "sources": source_records,
+        "conflicts": conflict_signals,
+        "confidence": confidence,
+        "limitations": limitations,
+    }
+
+
+@app.get("/api/evidence-check")
+async def evidence_check_get(request: Request):
+    """Discovery alias for GET-only agent catalogs: returns the identical 402
+    challenge (never executes — paid execution is POST with X-PAYMENT)."""
+    return _evidence_402_challenge()
+
+
+@app.post("/api/evidence-check")
+async def evidence_check(request: Request):
+    """Citrus Coast Evidence Audit (018-06): x402-protected evidence analysis
+    of caller-supplied sources. No X-PAYMENT -> 402 with payment requirements.
+    With payment -> verify -> settle -> analysis (or insufficient_sources
+    when no supplied source could be retrieved; citations are never
+    fabricated to fill the gap)."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    input_type = (body.get("input_type") or "claim").strip().lower()
+    if input_type not in ("claim", "question", "url", "brief"):
+        input_type = "claim"
+    inp = (body.get("input") or "").strip()
+    sources = body.get("sources") or []
+    if not isinstance(sources, list):
+        sources = []
+
+    x_payment = request.headers.get("x-payment")
+    if not x_payment:
+        return _evidence_402_challenge()
+
+    try:
+        payload = json.loads(base64.b64decode(x_payment).decode())
+    except Exception:
+        return JSONResponse(status_code=402, content={"error": "malformed X-PAYMENT header"})
+
+    reqs = _evidence_payment_requirements()
+    ok, detail = _facilitator_verify(payload, reqs)
+    if not ok:
+        return JSONResponse(status_code=402, content={"error": f"payment invalid: {detail}"})
+
+    # Settle BEFORE delivering the analysis. A failed settle means 402,
+    # never the result — same rule as the teardown and pre-pay routes.
+    settled, settle_resp, settle_detail = _facilitator_settle(payload, reqs)
+    if not settled:
+        return JSONResponse(status_code=402,
+                            content={"error": f"payment settlement failed: {settle_detail}"})
+
+    if not inp and input_type != "brief":
+        return JSONResponse(status_code=400, content={"error": "need {input}"})
+    try:
+        result = await asyncio.to_thread(_run_evidence_check, input_type, inp, sources)
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    result["settlement"] = {
+        "network": NETWORK,
+        "tx_hash": settle_resp.get("transaction"),
+        "transaction": settle_resp.get("transaction"),
+        "payer": settle_resp.get("payer"),
+    }
+    _log_sell_receipt({
+        "agent": "citruscoastai",
+        "direction": "sell",
+        "resource": "/api/evidence-check",
+        "amount": 0.50,
+        "asset": "USDC",
+        "txid": settle_resp.get("transaction"),
+        "network": settle_resp.get("network") or NETWORK,
+        "payer": settle_resp.get("payer"),
+        "pay_to": PAY_TO,
+        "verdict_class": result.get("status"),
+        "http_status": 200,
+        "observed_at": time.strftime("%Y-%m-%dT%H:%M:%S.000000+00:00", time.gmtime()),
+    })
+    resp = JSONResponse(content=result)
+    resp.headers["X-PAYMENT-RESPONSE"] = base64.b64encode(
+        json.dumps(settle_resp, separators=(",", ":")).encode()).decode()
+    return resp
+
+
 def _agent_card(base: str) -> dict:
     """Google A2A protocol v1.0 Agent Card."""
     return {
@@ -959,6 +1295,18 @@ def _agent_card(base: str) -> dict:
                 "outputModes": ["application/json"],
             },
             {
+                "id": "citrus-coast-evidence-audit",
+                "name": "Citrus Coast Evidence Audit",
+                "description": EVIDENCE_AUDIT_DESCRIPTION,
+                "tags": ["x402", "evidence", "audit", "verification", "base"],
+                "examples": [
+                    "Audit these sources for this claim",
+                    "Check this claim against the sources I supply",
+                ],
+                "inputModes": ["application/json"],
+                "outputModes": ["application/json"],
+            },
+            {
                 "id": "x402-prepay-check",
                 "name": "x402 Pre-Pay Check",
                 "description": ("Before paying an x402 endpoint, verify it: POST /api/prepay-check "
@@ -1003,6 +1351,16 @@ def well_known():
          "output": "JSON verdict: url, live_402_seen, payTo, price_usdc, host, listing_match, warnings[], verdict (likely_legit|suspicious|cannot_verify), checked_at"},
         {"method": "GET", "path": "/api/prepay-check",
          "note": "discovery only: returns the identical 402 payment challenge so GET-only "
+                 "catalogs can see the price; paid execution is POST with X-PAYMENT"},
+        {"method": "POST", "path": "/api/evidence-check",
+         "accepts": [_evidence_payment_requirements()],
+         "input": {"input_type": "claim | question | url | brief",
+                   "input": "string (claim, question, URL, or brief to check)",
+                   "sources": "array of source URLs to fetch and analyze (caller-supplied)",
+                   "mode": "deep"},
+         "output": "JSON evidence audit: checked_at, status (ok | insufficient_sources), findings[], sources[], conflicts[], confidence (low | medium | high), limitations[], settlement {network, tx_hash}. Sources are never fabricated; a naked claim/question with no retrievable supplied sources returns insufficient_sources."},
+        {"method": "GET", "path": "/api/evidence-check",
+         "note": "discovery only: returns the identical 402 payment challenge so GET-only "
                  "catalogs can see the price; paid execution is POST with X-PAYMENT"}]}
 
 
@@ -1033,12 +1391,24 @@ POST __BASE__/api/prepay-check — x402, $0.001 USDC on Base (eip155:8453), payT
 3. HTTP 200 -> JSON verdict: url, live_402_seen, payTo, price_usdc, host, listing_match (matched|mismatched|no_listing_found|stale_suspected), warnings[], verdict (likely_legit|suspicious|cannot_verify), checked_at.
 ## Notes
 The check fetches the target's live 402 challenge WITHOUT paying it and diffs payTo / price / asset / network against the target origin's public /.well-known/x402 listing. A live 402 alone does not prove legitimacy — no_listing_found yields cannot_verify. Discovery: /.well-known/x402.
+
+## Citrus Coast Evidence Audit (verify supplied sources for a claim)
+POST __BASE__/api/evidence-check — x402, $0.50 USDC on Base (eip155:8453), payTo 0x1c595F805edBCBa5873DeB6A9182cD84fC5Dae3A
+## Input (JSON)
+{"input_type": "claim | question | url | brief", "input": "...", "sources": ["https://..."], "mode": "deep"}
+## Flow
+1. POST without payment -> HTTP 402 with accepts[].
+2. Sign USDC transfer (EIP-3009/EIP-712), retry with X-PAYMENT header (base64 JSON payment payload).
+3. HTTP 200 -> JSON audit: checked_at, status (ok | insufficient_sources), findings[], sources[], conflicts[], confidence (low | medium | high), limitations[], settlement {network, tx_hash}.
+## Notes
+Caller-supplied sources only: the service fetches the URLs in "sources" (or the single URL when input_type is "url") and reports deterministic keyword-presence findings. It has no web-search SDK or model provider, so it performs no independent source discovery and never fabricates citations. A naked claim/question with no retrievable supplied sources returns insufficient_sources. High confidence requires genuine independent corroboration from at least two distinct hosts. Not medical, legal, or financial advice. Discovery: /.well-known/x402.
 """
 
 LLMS_TXT = """# Citrus Coast AI — Agent Trust Teardown
 Deep trust report on any x402 agent endpoint. Delivery-first: verdict + score free.
 - Agents: POST /api/teardown {"url": "<x402 endpoint>"} -> free verdict (TRUST/CAUTION/DO NOT PAY) + 0-100 score. Same request with X-PAYMENT ($0.50 USDC on Base) -> full per-check evidence. See /skill.md. Discovery: /.well-known/x402.
 - Agents: POST /api/prepay-check, x402 $0.001 USDC on Base — quick verdict on an x402 endpoint BEFORE paying it (live 402 vs public listing). See /skill.md.
+- Agents: POST /api/evidence-check, x402 $0.50 USDC on Base — Citrus Coast Evidence Audit: deterministic analysis of caller-supplied URLs/source briefs (dated findings, conflicts, calibrated confidence, limitations). Naked claims with no retrievable supplied sources return insufficient_sources; citations are never fabricated. See /skill.md.
 - Humans: free trust teardown via the web form (3/day).
 """
 
