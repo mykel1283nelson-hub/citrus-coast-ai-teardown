@@ -34,6 +34,7 @@ import ipaddress
 import json
 import re
 import time
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlparse
@@ -930,19 +931,28 @@ async def prepay_check(request: Request):
 # none of which could be fetched, returns status "insufficient_sources"
 # (confidence low) AFTER payment — the buyer paid for an analysis, and the
 # truthful analysis is that no retrievable sources were available.
-# Confidence calibration: high requires >= 2 independently fetched sources
-# from distinct hosts that both mention the claim terms with no conflict
-# signal; medium requires 1 such source (or >= 2 fetched with only one
-# mentioning the terms); anything else, including any conflict signal, is
-# capped at low. One source, or two copies of one press release, never
-# counts as independent corroboration — distinct hosts are required.
+# Confidence calibration (Corroboration Lines v1.1): confidence is
+# textual evidence coverage, never claim truth. A source qualifies as
+# mentioning only via a single contiguous 80-token window holding >= 2
+# distinct claim terms (1 if the claim yields one term). Sources under
+# 50 substantive tokens are short_text: they may join an exact-duplicate
+# group but cannot establish high. Blockquotes are excluded from the
+# similarity fingerprint; a quote-only match is quoted_match_only and
+# does not count toward high. High requires no conflict signal AND a
+# pair of qualifying sources on distinct hosts in different complete-link
+# groups (5-token shingles; exact = same normalized URL or content hash;
+# near = J >= 0.80 and R >= 0.70; possible_shared_origin = 0.40 <= J <
+# 0.80 or C >= 0.80 with R < 0.70, never auto-merged and never alone
+# sufficient for high). Medium requires at least one mentioning source.
+# Anything else, including any conflict signal, is capped at low.
 # ---------------------------------------------------------------------------
 
 EVIDENCE_AUDIT_DESCRIPTION = ("Citrus Coast Evidence Audit reviews supplied claims, questions, "
     "URLs, or source briefs and returns dated findings, citations, conflicting evidence, "
-    "calibrated confidence, and explicit limitations. Sources are never fabricated; "
-    "unsupported requests return insufficient-evidence. It is an evidence-analysis service, "
-    "not medical, legal, or financial advice.")
+    "textual evidence coverage, and explicit limitations. Coverage is reported as "
+    "Coverage: High / Medium / Low and is never a claim that a claim is verified or true. "
+    "Sources are never fabricated; unsupported requests return insufficient-evidence. "
+    "It is an evidence-analysis service, not medical, legal, or financial advice.")
 
 
 def _evidence_payment_requirements() -> dict:
@@ -1011,8 +1021,29 @@ _STOPWORDS = {"the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "is"
               "isnt", "isn't", "not", "no", "yes", "if", "then", "than", "so"}
 
 
+def _evidence_tokens(text: str) -> tuple:
+    """Corroboration Lines v1.1 tokenization: Unicode-normalize (NFKC),
+    casefold, alphanumeric tokens (Unicode letters/digits), order preserved.
+    Normalization is applied per token so offsets into the original text
+    stay valid for exact excerpts."""
+    return tuple(unicodedata.normalize("NFKC", t).casefold()
+                 for t in re.findall(r"[^\W_]+", text or ""))
+
+
+def _evidence_token_spans(text: str) -> tuple:
+    """Tokenize text, returning (tokens, spans, text) where tokens are
+    normalized per token and each span is (start, end) into the original
+    text, so a window excerpt can be sliced exactly from the original."""
+    spans = []
+    tokens = []
+    for m in re.finditer(r"[^\W_]+", text or ""):
+        tokens.append(unicodedata.normalize("NFKC", m.group(0)).casefold())
+        spans.append((m.start(), m.end()))
+    return tuple(tokens), spans, (text or "")
+
+
 def _claim_terms(text: str) -> list:
-    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    words = _evidence_tokens(text)
     seen = []
     for w in words:
         if len(w) >= 3 and w not in _STOPWORDS and w not in seen:
@@ -1030,6 +1061,56 @@ def _strip_html(raw: bytes) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+_BOILERPLATE_CLASS = r"(nav|footer|sidebar|cookie|banner|menu|advert|newsletter|popup|modal|comment)"
+
+
+def _extract_evidence_html(raw: bytes) -> tuple:
+    """Corroboration Lines v1.1 extraction from raw HTML bytes. Returns
+    (full_text, fingerprint_text, quoted_text):
+    - Prefer <article>, else <main>, else <body>, else the whole document.
+    - Exclude scripts, styles, nav, footer, forms, and obvious boilerplate
+      containers (class/id matching nav/footer/sidebar/cookie/banner/menu/
+      advert/newsletter/popup/modal/comment). Deterministic regex
+      approximation: non-greedy removal may truncate on nested same-tag
+      elements; this is conservative (it removes, never invents, text).
+    - Blockquotes are captured separately: quoted_text holds their cleaned
+      contents, and fingerprint_text is the cleaned text with blockquotes
+      removed, so quoted material never contributes to the similarity
+      fingerprint. full_text keeps quotes (for quoted-match detection)."""
+    try:
+        html = raw.decode("utf-8", errors="ignore")
+    except Exception:
+        html = ""
+    segment = html
+    m = re.search(r"<article\b[^>]*>(.*?)</article>", html, flags=re.S | re.I)
+    if not m:
+        m = re.search(r"<main\b[^>]*>(.*?)</main>", html, flags=re.S | re.I)
+    if not m:
+        m = re.search(r"<body\b[^>]*>(.*?)</body>", html, flags=re.S | re.I)
+    if m:
+        segment = m.group(1)
+    quoted_raw = re.findall(r"<blockquote\b[^>]*>(.*?)</blockquote>",
+                            segment, flags=re.S | re.I)
+    quoted_text = " ".join(_strip_html(q.encode("utf-8", errors="ignore"))
+                           for q in quoted_raw)
+    segment_no_quotes = re.sub(r"<blockquote\b[^>]*>.*?</blockquote>", " ",
+                               segment, flags=re.S | re.I)
+
+    def _clean(fragment: str) -> str:
+        frag = fragment
+        for tag in ("script", "style", "nav", "footer", "form"):
+            frag = re.sub(r"<%s\b[^>]*>.*?</%s>" % (tag, tag), " ",
+                          frag, flags=re.S | re.I)
+        frag = re.sub(
+            r"<(div|section|aside|nav|footer|header)\b[^>]*"
+            r"(class|id)=\"[^\"]*" + _BOILERPLATE_CLASS + r"[^\"]*\"[^>]*>"
+            r".*?</\1>", " ", frag, flags=re.S | re.I)
+        frag = re.sub(r"<[^>]+>", " ", frag)
+        return re.sub(r"\s+", " ", frag).strip()
+
+    return _clean(segment), _clean(segment_no_quotes), quoted_text
 
 
 def _fetch_evidence_source(url: str) -> dict:
@@ -1051,23 +1132,191 @@ def _fetch_evidence_source(url: str) -> dict:
     if r.status_code != 200:
         return {"url": url, "status": "failed",
                 "error": f"fetch returned HTTP {r.status_code}"}
-    text = _strip_html(r.content)
+    text, fingerprint_text, quoted_text = _extract_evidence_html(r.content)
     return {"url": str(r.url), "requested_url": url, "status": "fetched",
             "host": urlparse(str(r.url)).hostname or host,
-            "content_length": len(text), "text": text}
+            "content_length": len(text), "text": text,
+            "fingerprint_text": fingerprint_text,
+            "quoted_text": quoted_text}
 
 
 _CONFLICT_MARKERS = ("false", "incorrect", "debunked", "misleading", "hoax",
                       "not true", "no evidence", "unproven", "disputed")
 
 
+def _normalize_evidence_host(host: str) -> str:
+    return (host or "").lower().lstrip("www.").strip(".")
+
+
+def _normalize_evidence_url(url: str) -> str:
+    """Normalized final URL for duplicate detection and cluster IDs:
+    lowercase scheme/host (www stripped), fragment dropped, trailing slash
+    stripped from non-root paths. Query is kept as-is (documented)."""
+    try:
+        p = urlparse(url or "")
+        scheme = (p.scheme or "https").lower()
+        host = _normalize_evidence_host(p.hostname or "")
+        path = p.path or ""
+        if len(path) > 1:
+            path = path.rstrip("/")
+        out = scheme + "://" + host + path
+        if p.query:
+            out += "?" + p.query
+        return out
+    except Exception:
+        return (url or "").lower()
+
+
+def _evidence_text_shingles(words: tuple) -> set:
+    if len(words) < 5:
+        return set()
+    return {words[i:i + 5] for i in range(len(words) - 4)}
+
+
+def _evidence_content_hash(words: tuple) -> str:
+    return hashlib.sha256(" ".join(words).encode("utf-8")).hexdigest()
+
+
+def _evidence_pair_metrics(node_a: dict, node_b: dict) -> tuple:
+    """Returns (jaccard, containment, size_ratio, classification) for two
+    >= 50-token nodes, plus exact_duplicate when the normalized final URL
+    or the normalized content hash matches. Short nodes are never compared
+    by similarity: they may only join an exact-duplicate group."""
+    if node_a["norm_url"] == node_b["norm_url"]:
+        return 1.0, 1.0, 1.0, "exact_duplicate"
+    if node_a["content_hash"] == node_b["content_hash"]:
+        return 1.0, 1.0, 1.0, "exact_duplicate"
+    if node_a["kind"] == "short" or node_b["kind"] == "short":
+        return 0.0, 0.0, 1.0, "textually_distinct"
+    sa, sb = node_a["shingles"], node_b["shingles"]
+    if not sa or not sb:
+        return 0.0, 0.0, 1.0, "textually_distinct"
+    inter = len(sa & sb)
+    union = len(sa | sb)
+    j = inter / union if union else 0.0
+    c = inter / min(len(sa), len(sb)) if min(len(sa), len(sb)) else 0.0
+    r = min(len(sa), len(sb)) / max(len(sa), len(sb)) if max(len(sa), len(sb)) else 1.0
+    if j >= 0.80 and r >= 0.70:
+        return j, c, r, "near_duplicate"
+    if (0.40 <= j < 0.80) or (c >= 0.80 and r < 0.70):
+        return j, c, r, "possible_shared_origin"
+    return j, c, r, "textually_distinct"
+
+
+def _evidence_find_window(tokens: tuple, spans: list, norm_text: str,
+                          terms: list) -> tuple:
+    """Deliberate reading (documented): a source QUALIFIES as mentioning
+    iff a single contiguous 80-token window contains at least 2 distinct
+    claim terms (or the single claim term, if the claim yields only one).
+    Returns (exact_excerpt, matched_terms) for the earliest such window,
+    else None. Terms occurring only in unrelated paragraphs — spread wider
+    than 80 tokens — do NOT qualify. Excerpt is the exact slice of the
+    original text spanning the window's first to last token."""
+    if not terms or not tokens:
+        return None
+    need = 2 if len(terms) >= 2 else 1
+    term_set = set(terms)
+    for start in range(len(tokens)):
+        window = tokens[start:start + 80]
+        matched = sorted({t for t in window if t in term_set})
+        if len(matched) >= need:
+            excerpt = norm_text[spans[start][0]:spans[start + len(window) - 1][1]]
+            return excerpt, matched
+    return None
+
+
+def _evidence_cluster_groups(nodes: list) -> tuple:
+    """Deterministic complete-link clustering (replaces greedy v1).
+    Nodes are pre-sorted by (normalized URL, content hash). Clusters start
+    as singletons; a merge is allowed ONLY when EVERY cross-cluster pair
+    is exact_duplicate or near_duplicate. Eligible merges are evaluated by
+    descending minimum cross-pair similarity (exact = 1.0, else Jaccard),
+    ties broken by lexical order of the clusters' sorted member URLs.
+    possible_shared_origin pairs are NEVER auto-merged. Returns
+    (clusters, possible_pairs) where possible_pairs covers qualifying-node
+    pairs classified possible_shared_origin."""
+    ordered = sorted(nodes, key=lambda n: (n["norm_url"], n["content_hash"]))
+    clusters = [[n] for n in ordered]
+    possible_pairs = []
+    for i in range(len(ordered)):
+        for j in range(i + 1, len(ordered)):
+            a, b = ordered[i], ordered[j]
+            if a["kind"] == "qualifying" and b["kind"] == "qualifying":
+                jj, cc, rr, cls = _evidence_pair_metrics(a, b)
+                if cls == "possible_shared_origin":
+                    possible_pairs.append({
+                        "source_a": a["norm_url"], "source_b": b["norm_url"],
+                        "jaccard": round(jj, 6), "containment": round(cc, 6),
+                        "size_ratio": round(rr, 6),
+                        "classification": cls})
+    while True:
+        best = None
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                cross = []
+                eligible = True
+                for a in clusters[i]:
+                    for b in clusters[j]:
+                        _, _, _, cls = _evidence_pair_metrics(a, b)
+                        if cls not in ("exact_duplicate", "near_duplicate"):
+                            eligible = False
+                            break
+                        sim = 1.0 if cls == "exact_duplicate" else \
+                            _evidence_pair_metrics(a, b)[0]
+                        cross.append(sim)
+                    if not eligible:
+                        break
+                if not eligible:
+                    continue
+                score = min(cross) if cross else 1.0
+                key = (-score,
+                       tuple(sorted(n["norm_url"] for n in clusters[i])),
+                       tuple(sorted(n["norm_url"] for n in clusters[j])))
+                if best is None or key < best[0]:
+                    best = (key, i, j)
+        if best is None:
+            break
+        _, i, j = best
+        clusters[i] = clusters[i] + clusters[j]
+        del clusters[j]
+    return clusters, possible_pairs
+
+
+def _evidence_group_reason(members: list) -> str:
+    if len(members) == 1:
+        return "short_text" if members[0]["kind"] == "short" else "single_source"
+    classes = set()
+    for x in range(len(members)):
+        for y in range(x + 1, len(members)):
+            classes.add(_evidence_pair_metrics(members[x], members[y])[3])
+    if classes <= {"exact_duplicate"}:
+        return "exact_duplicate"
+    if "near_duplicate" in classes and "exact_duplicate" in classes:
+        return "exact_and_near_duplicate"
+    return "near_duplicate"
+
+
+def _evidence_group_id(members: list) -> str:
+    joined = "\n".join(sorted({n["norm_url"] for n in members}))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()[:12]
+
+
 def _run_evidence_check(input_type: str, inp: str, sources: list) -> dict:
     """Deterministic, zero-LLM evidence analysis over caller-supplied
     sources. Pure analysis — no payment, no signing. The POST route wraps
-    this after verify -> settle."""
+    this after verify -> settle. Corroboration Lines v1.1: confidence is
+    textual evidence coverage (never claim truth); a source qualifies as
+    mentioning only via a single contiguous 80-token window holding >= 2
+    distinct claim terms (1 if the claim yields a single term)."""
     checked_at = time.strftime("%Y-%m-%dT%H:%M:%S.000000+00:00", time.gmtime())
+    method_version = "corroboration-lines-v1.1"
+    method_parameters = ("Shingle size 5; duplicate threshold 0.80; "
+                         "ambiguity threshold 0.40; minimum substantive "
+                         "tokens 50; evidence window 80")
     limitations = [
-        "Deterministic analysis only: fetched-source text is checked for keyword presence against the input terms; this is not semantic verification, fact adjudication, or truth certification.",
+        "Textual matching only: the audit checks whether claim terms appear together in a single 80-token window of each supplied source; it does not verify that a source semantically supports the claim, and paraphrased restatements can escape detection.",
+        "Coverage, not truth: confidence reports textual evidence coverage (Coverage: High / Medium / Low), never that a claim is verified or true.",
+        "Independence is measured as corroboration lines: near-duplicate or syndicated texts count as one line, ambiguous overlaps are disclosed and cannot alone establish high coverage.",
         "Only caller-supplied sources were used: this runtime has no web-search SDK or model provider, so no independent source discovery was performed.",
         "Not medical, legal, or financial advice.",
     ]
@@ -1081,12 +1330,19 @@ def _run_evidence_check(input_type: str, inp: str, sources: list) -> dict:
         return {
             "checked_at": checked_at,
             "status": "insufficient_sources",
+            "state": "insufficient_sources",
             "input_type": input_type,
             "input": (inp or "")[:1000],
             "findings": [],
             "sources": [],
+            "source_evidence": [],
             "conflicts": [],
             "confidence": "low",
+            "confidence_scope": "textual_evidence_coverage_not_claim_truth",
+            "coverage_display": "Coverage: Low",
+            "claim_support_status": "no_support_found",
+            "method_version": method_version,
+            "method_parameters": method_parameters,
             "reason": "No independently retrievable sources were available for this request.",
             "limitations": limitations + [
                 "No source URLs were supplied with this request; supply URLs in 'sources' (or use input_type 'url') for a fetched analysis.",
@@ -1098,19 +1354,35 @@ def _run_evidence_check(input_type: str, inp: str, sources: list) -> dict:
         rec = _fetch_evidence_source(src)
         if rec.get("status") == "fetched":
             fetched.append(rec)
-            source_records.append({k: v for k, v in rec.items() if k != "text"})
+            source_records.append({k: v for k, v in rec.items()
+                                   if k not in ("text", "fingerprint_text",
+                                                "quoted_text")})
         else:
             source_records.append(rec)
     if not fetched:
         return {
             "checked_at": checked_at,
             "status": "insufficient_sources",
+            "state": "insufficient_sources",
             "input_type": input_type,
             "input": (inp or "")[:1000],
             "findings": [],
             "sources": source_records,
+            "source_evidence": [
+                {"url": r.get("url"), "host": _normalize_evidence_host(r.get("host") or ""),
+                 "retrieved_at": checked_at, "excerpt": "", "text_hash": None,
+                 "token_count": 0, "qualification": "fetch_failed",
+                 "flags": ["fetch_failed"], "group_id": None,
+                 "error": r.get("error")}
+                for r in source_records
+            ],
             "conflicts": [],
             "confidence": "low",
+            "confidence_scope": "textual_evidence_coverage_not_claim_truth",
+            "coverage_display": "Coverage: Low",
+            "claim_support_status": "no_support_found",
+            "method_version": method_version,
+            "method_parameters": method_parameters,
             "reason": "No independently retrievable sources were available for this request.",
             "limitations": limitations + [
                 "None of the supplied source URLs could be fetched successfully; see sources[] for the per-source failure.",
@@ -1118,46 +1390,162 @@ def _run_evidence_check(input_type: str, inp: str, sources: list) -> dict:
         }
     terms = _claim_terms(inp)
     findings = []
-    hosts_mentioning = set()
+    source_evidence = []
     conflict_signals = []
+    nodes = []
+    node_by_url = {}
+    any_term_match = False
+    mentioning_hosts = set()
+    mentioning_any = False
     for rec in fetched:
-        text_lower = rec["text"].lower()
-        matched = [t for t in terms if t in text_lower]
-        if matched:
-            hosts_mentioning.add((rec.get("host") or "").lower().lstrip("www."))
-        markers = [m for m in _CONFLICT_MARKERS if m in text_lower]
-        if markers and matched:
+        full_text = rec.get("text") or ""
+        fp_text = rec.get("fingerprint_text") or full_text
+        quoted_text = rec.get("quoted_text") or ""
+        fp_tokens, fp_spans, fp_norm = _evidence_token_spans(fp_text)
+        full_tokens, full_spans, full_norm = _evidence_token_spans(full_text)
+        quoted_token_set = set(_evidence_tokens(quoted_text))
+        token_count = len(fp_tokens)
+        short = token_count < 50
+        terms_found = sorted({t for t in terms
+                              if t in set(fp_tokens) or t in set(full_tokens)})
+        has_any_term = bool(terms_found)
+        any_term_match = any_term_match or has_any_term
+        window_fp = _evidence_find_window(fp_tokens, fp_spans, fp_norm, terms)
+        window_full = _evidence_find_window(full_tokens, full_spans, full_norm, terms)
+        if short and has_any_term:
+            qualification = "short_text"
+            excerpt = ""
+        elif window_fp is not None:
+            qualification = "qualifying"
+            excerpt = window_fp[0]
+        elif (window_full is not None and quoted_text
+              and set(window_full[1]) <= quoted_token_set):
+            qualification = "quoted_match_only"
+            excerpt = window_full[0]
+        elif has_any_term:
+            qualification = "term_match_only"
+            excerpt = ""
+        else:
+            qualification = "no_match"
+            excerpt = ""
+        norm_host = _normalize_evidence_host(rec.get("host") or "")
+        norm_url = _normalize_evidence_url(rec.get("url") or "")
+        flags = []
+        if qualification == "short_text":
+            flags.append("short_text")
+        if qualification == "quoted_match_only":
+            flags.append("quoted_match_only")
+        markers = [m for m in _CONFLICT_MARKERS
+                   if m in full_text.casefold()]
+        if markers and has_any_term:
+            flags.append("conflict_signal")
             conflict_signals.append({
                 "source": rec["url"],
                 "signal": "keyword conflict marker present alongside claim terms: " + ", ".join(markers),
                 "note": "Keyword signal only, not an adjudication that the source contradicts the input.",
             })
+        if qualification in ("qualifying", "short_text", "quoted_match_only"):
+            mentioning_any = True
+            mentioning_hosts.add(norm_host)
         findings.append({
             "source": rec["url"],
             "host": rec.get("host"),
             "status": "fetched",
-            "terms_found": matched,
+            "terms_found": terms_found,
             "terms_checked": terms,
-            "excerpt": rec["text"][:500],
+            "excerpt": excerpt,
         })
+        ev = {
+            "url": rec["url"],
+            "host": norm_host,
+            "retrieved_at": checked_at,
+            "excerpt": excerpt,
+            "text_hash": _evidence_content_hash(fp_tokens),
+            "token_count": token_count,
+            "qualification": qualification,
+            "flags": flags,
+            "group_id": None,
+        }
+        source_evidence.append(ev)
+        if qualification in ("qualifying", "short_text"):
+            node = {
+                "norm_url": norm_url, "orig_url": rec["url"],
+                "host": norm_host, "token_count": token_count,
+                "shingles": _evidence_text_shingles(fp_tokens),
+                "content_hash": _evidence_content_hash(fp_tokens),
+                "kind": qualification,
+                "evidence": ev,
+            }
+            nodes.append(node)
+            node_by_url.setdefault(norm_url, []).append(node)
+    clusters, possible_pairs = _evidence_cluster_groups(nodes)
+    group_of_node = {}
+    cluster_out = []
+    for members in clusters:
+        gid = _evidence_group_id(members)
+        member_urls = sorted({n["norm_url"] for n in members})
+        for n in members:
+            group_of_node[id(n)] = gid
+            n["evidence"]["group_id"] = gid
+        cluster_out.append({
+            "id": gid,
+            "representative": member_urls[0] if member_urls else None,
+            "members": member_urls,
+            "reason": _evidence_group_reason(members),
+        })
+    corroboration_lines = len(clusters)
+    qualifying_nodes = [n for n in nodes if n["kind"] == "qualifying"]
+    high_pair = False
+    for i in range(len(qualifying_nodes)):
+        for j in range(i + 1, len(qualifying_nodes)):
+            a, b = qualifying_nodes[i], qualifying_nodes[j]
+            if a["host"] == b["host"]:
+                continue
+            if group_of_node.get(id(a)) == group_of_node.get(id(b)):
+                continue
+            _, _, _, cls = _evidence_pair_metrics(a, b)
+            if cls == "textually_distinct":
+                high_pair = True
+                break
+        if high_pair:
+            break
     if conflict_signals:
         confidence = "low"
-    elif len(hosts_mentioning) >= 2:
+    elif high_pair:
         confidence = "high"
-    elif len(hosts_mentioning) == 1:
+    elif mentioning_any:
         confidence = "medium"
     else:
         confidence = "low"
-        limitations.append("No fetched source mentioned the input terms; findings record fetch success only, not corroboration.")
+        limitations.append("No fetched source mentioned the input terms in a single 80-token window; findings record fetch success only, not corroboration.")
+    if any(n["kind"] == "short" for n in nodes):
+        limitations.append("Short sources (under 50 substantive tokens) cannot establish high coverage.")
+    if any(e["qualification"] == "quoted_match_only" for e in source_evidence):
+        limitations.append("Matches found only inside quotations do not count toward high coverage.")
+    if possible_pairs:
+        limitations.append("Some source pairs share text ambiguously; see possible_shared_origin_pairs.")
     return {
         "checked_at": checked_at,
         "status": "ok",
+        "state": "conflict_signal_detected" if conflict_signals else "ok",
         "input_type": input_type,
         "input": (inp or "")[:1000],
         "findings": findings,
         "sources": source_records,
+        "source_evidence": source_evidence,
         "conflicts": conflict_signals,
         "confidence": confidence,
+        "confidence_scope": "textual_evidence_coverage_not_claim_truth",
+        "coverage_display": "Coverage: " + confidence.capitalize(),
+        "claim_support_status": ("not_semantically_verified" if any_term_match
+                                 else "no_support_found"),
+        "corroboration_lines": corroboration_lines,
+        "corroboration_hosts": sorted(mentioning_hosts),
+        "corroboration_host_count": len(mentioning_hosts),
+        "corroboration_clusters": cluster_out,
+        "possible_shared_origin_pairs": possible_pairs,
+        "method_version": method_version,
+        "method_parameters": method_parameters,
         "limitations": limitations,
     }
 
@@ -1358,7 +1746,7 @@ def well_known():
                    "input": "string (claim, question, URL, or brief to check)",
                    "sources": "array of source URLs to fetch and analyze (caller-supplied)",
                    "mode": "deep"},
-         "output": "JSON evidence audit: checked_at, status (ok | insufficient_sources), findings[], sources[], conflicts[], confidence (low | medium | high), limitations[], settlement {network, tx_hash}. Sources are never fabricated; a naked claim/question with no retrievable supplied sources returns insufficient_sources."},
+         "output": "JSON evidence audit: checked_at, status (ok | insufficient_sources), findings[], sources[], source_evidence[], conflicts[], confidence (low | medium | high), coverage_display (Coverage: High / Medium / Low), corroboration_lines, corroboration_clusters[], possible_shared_origin_pairs[], method_version corroboration-lines-v1.1, limitations[], settlement {network, tx_hash}. Confidence is textual evidence coverage, never a claim that a claim is verified. Sources are never fabricated; a naked claim/question with no retrievable supplied sources returns insufficient_sources."},
         {"method": "GET", "path": "/api/evidence-check",
          "note": "discovery only: returns the identical 402 payment challenge so GET-only "
                  "catalogs can see the price; paid execution is POST with X-PAYMENT"}]}
@@ -1401,7 +1789,7 @@ POST __BASE__/api/evidence-check — x402, $0.50 USDC on Base (eip155:8453), pay
 2. Sign USDC transfer (EIP-3009/EIP-712), retry with X-PAYMENT header (base64 JSON payment payload).
 3. HTTP 200 -> JSON audit: checked_at, status (ok | insufficient_sources), findings[], sources[], conflicts[], confidence (low | medium | high), limitations[], settlement {network, tx_hash}.
 ## Notes
-Caller-supplied sources only: the service fetches the URLs in "sources" (or the single URL when input_type is "url") and reports deterministic keyword-presence findings. It has no web-search SDK or model provider, so it performs no independent source discovery and never fabricates citations. A naked claim/question with no retrievable supplied sources returns insufficient_sources. High confidence requires genuine independent corroboration from at least two distinct hosts. Not medical, legal, or financial advice. Discovery: /.well-known/x402.
+Caller-supplied sources only: the service fetches the URLs in "sources" (or the single URL when input_type is "url") and reports deterministic keyword-presence findings. It has no web-search SDK or model provider, so it performs no independent source discovery and never fabricates citations. A naked claim/question with no retrievable supplied sources returns insufficient_sources. A source qualifies as mentioning only when a single 80-token window holds at least 2 distinct claim terms; sources under 50 tokens cannot establish high coverage; syndicated or near-duplicate texts count as one corroboration line. Buyer-facing display: report confidence as "Coverage: High" / "Coverage: Medium" / "Coverage: Low", never as "Claim verified" — confidence is textual evidence coverage, not claim truth. Not medical, legal, or financial advice. Discovery: /.well-known/x402.
 """
 
 LLMS_TXT = """# Citrus Coast AI — Agent Trust Teardown
