@@ -14,6 +14,9 @@ Citrus Coast AI — Model B server.
 - GET  /api/teardown      discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /api/prepay-check  discovery alias: identical 402 challenge for GET-only catalogs
 - GET  /api/evidence-check discovery alias: identical 402 challenge for GET-only catalogs
+- POST /api/evidence-batch  x402 tier: $5 USDC on Base per batch -> up to 10 Evidence Audit analyses in one call
+- GET  /api/evidence-batch  discovery alias: identical 402 challenge for GET-only catalogs
+- GET  /server.json, /.well-known/server.json  service descriptor (fixes the 2026-11-01 404 gap)
 - GET  /.well-known/x402  discovery for x402 indexers
 - GET  /skill.md, /llms.txt  agent-readable docs
 - GET  /ledger.json  public machine-readable ledger (balances + receipt rows)
@@ -30,6 +33,9 @@ no fake referral header is implemented (see RECEIPTS.md).
 """
 import asyncio
 import base64
+import fcntl
+import os
+import threading
 import ipaddress
 import json
 import re
@@ -1629,6 +1635,62 @@ async def evidence_check(request: Request):
     return resp
 
 
+
+# Evidence Audit Batch ($5, up to 10 audits; Board 018-17, founder go-live 2026-11-02).
+# Handler lives in batch.py (serve_batch); this wrapper only wires it to the
+# live payment helpers. Guard: EVIDENCE_BATCH_LIVE != "1" => 503, facilitator
+# never called. Deploy is single-instance (flock/claim files are one-host).
+import batch as _batch_mod
+
+_BATCH_DIR = Path(__file__).resolve().parent
+
+
+def _batch_live_enabled():
+    return os.environ.get("EVIDENCE_BATCH_LIVE") == "1"
+
+
+def _batch_requirements():
+    reqs = _payment_requirements()
+    reqs["amount"] = _batch_mod.PRICE_ATOMIC
+    reqs["maxAmountRequired"] = _batch_mod.PRICE_ATOMIC
+    return reqs
+
+
+def _batch_402_challenge():
+    resp = JSONResponse(status_code=402, content={"x402Version": 1, "accepts": [_batch_requirements()], "extensions": {"bazaar": {"discoverable": True, "name": "Citrus Coast Evidence Audit Batch", "description": "Up to 10 Evidence Audit analyses in one $5 USDC batch."}}, "error": "payment required: $5 USDC on Base for the Evidence Audit Batch"})
+    resp.headers["PAYMENT-REQUIRED"] = base64.b64encode(json.dumps({"x402Version": 1, "accepts": [_batch_requirements()]}).encode()).decode()
+    return resp
+
+
+def _batch_not_released():
+    return JSONResponse(status_code=503, content={"error": "evidence-batch not released", "price_usdc": _batch_mod.PRICE_USDC, "max_audits": _batch_mod.MAX_AUDITS})
+
+
+@app.get("/api/evidence-batch")
+async def evidence_batch_get(request: Request):
+    if not _batch_live_enabled():
+        return _batch_not_released()
+    return _batch_402_challenge()
+
+
+@app.post("/api/evidence-batch")
+async def evidence_batch(request: Request):
+    if not _batch_live_enabled():
+        return _batch_not_released()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    status, content, extra = await asyncio.to_thread(
+        _batch_mod.serve_batch, body, headers, _facilitator_verify, _facilitator_settle,
+        _batch_requirements(), PAY_TO, NETWORK, _BATCH_DIR)
+    resp = JSONResponse(status_code=status, content=content)
+    for k, v in extra.items():
+        resp.headers[k] = v
+    return resp
+
+
 def _agent_card(base: str) -> dict:
     """Google A2A protocol v1.0 Agent Card."""
     return {
@@ -1749,6 +1811,13 @@ def well_known():
          "output": "JSON evidence audit: checked_at, status (ok | insufficient_sources), findings[], sources[], source_evidence[], conflicts[], confidence (low | medium | high), coverage_display (Coverage: High / Medium / Low), corroboration_lines, corroboration_clusters[], possible_shared_origin_pairs[], method_version corroboration-lines-v1.1, limitations[], settlement {network, tx_hash}. Confidence is textual evidence coverage, never a claim that a claim is verified. Sources are never fabricated; a naked claim/question with no retrievable supplied sources returns insufficient_sources."},
         {"method": "GET", "path": "/api/evidence-check",
          "note": "discovery only: returns the identical 402 payment challenge so GET-only "
+                 "catalogs can see the price; paid execution is POST with X-PAYMENT"},
+        {"method": "POST", "path": "/api/evidence-batch",
+         "accepts": [_batch_requirements()],
+         "input": {"audits": "array of up to 10 audits, each {input_type: claim | question | url | brief, input: string, sources: array of source URLs}"},
+         "output": "JSON batch audit: batch_id, status (complete | partial), results[], summary, settlement {transaction, network, payer}. Partials are never stored as complete; retry remaining audits at no extra charge via header x-batch-retry: <batch_id>."},
+        {"method": "GET", "path": "/api/evidence-batch",
+         "note": "discovery only: returns the identical 402 payment challenge so GET-only "
                  "catalogs can see the price; paid execution is POST with X-PAYMENT"}]}
 
 
@@ -1801,6 +1870,24 @@ Deep trust report on any x402 agent endpoint. Delivery-first: verdict + score fr
 """
 
 
+SKILL_MD += """
+
+## Citrus Coast Evidence Audit Batch (up to 10 audits in one $5 call)
+POST __BASE__/api/evidence-batch — x402, $5 USDC on Base (eip155:8453), payTo 0x1c595F805edBCBa5873DeB6A9182cD84fC5Dae3A
+## Input (JSON)
+{"audits": [{"input_type": "claim | question | url | brief", "input": "...", "sources": ["https://..."]}]}
+Max 10 audits, max 10 sources/audit, max 50 sources/batch, max 2000 input chars, 120s batch time budget. Same limitations as the Evidence Audit: textual evidence coverage only (Coverage: High/Medium/Low), never "Claim verified"; caller-supplied sources only, never fabricated; naked claims with no retrievable supplied sources return insufficient_sources.
+## Flow
+1. POST without payment -> HTTP 402 with accepts[] ($5 USDC).
+2. Sign USDC transfer (EIP-3009/EIP-712), retry with X-PAYMENT header (base64 JSON payment payload).
+3. HTTP 200 -> JSON batch audit: batch_id, status (complete | partial), results[], summary, settlement {transaction, network, payer}.
+## Notes
+A stored batch_id replays without a second settlement. A batch that hits the time budget returns status "partial" and is NEVER stored as complete: retry the remaining audits at no extra charge by POSTing the same audits with header "x-batch-retry: <batch_id>" and no new payment. A paid re-submission of a partial batch is rejected (409) and never settles again. Discovery: /.well-known/x402.
+"""
+
+LLMS_TXT += """- Agents: POST /api/evidence-batch, x402 $5 USDC on Base — Citrus Coast Evidence Audit Batch: up to 10 Evidence Audit analyses in one paid batch. Partial batches retry at no extra charge via header x-batch-retry: <batch_id>. See /skill.md. Discovery: /.well-known/x402.
+"""
+
 VERIFY_HASH_402INDEX = "5fa074deec27e4bbf42d0b89b04bfcd4e2c85258a2e9ec7bbe8a7c830f2c2c8e"
 
 
@@ -1825,6 +1912,23 @@ def ledger():
     if _LEDGER_DATA is None:
         return JSONResponse(content={"error": "ledger unavailable"}, status_code=503)
     return JSONResponse(content=_LEDGER_DATA)
+
+
+def _server_descriptor():
+    try:
+        return json.loads((_BATCH_DIR / "server.json").read_text(encoding="utf-8"))
+    except Exception:
+        return {"error": "server descriptor unavailable"}
+
+
+@app.get("/server.json")
+def server_descriptor():
+    return JSONResponse(content=_server_descriptor())
+
+
+@app.get("/.well-known/server.json")
+def well_known_server_descriptor():
+    return JSONResponse(content=_server_descriptor())
 
 
 # ---------------------------------------------------------------------------
