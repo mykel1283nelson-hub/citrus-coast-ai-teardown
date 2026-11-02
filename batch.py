@@ -31,10 +31,12 @@ Replay / double-charge safety (the hard rule):
     partial paid delivery, no half-executed batch to reconcile.
 """
 
+import fcntl
 import hashlib
 import json
 import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -424,3 +426,136 @@ def run_batch(audits, engine=None, store=None, max_seconds=DEFAULT_MAX_SECONDS):
         # by the caller), never silently replayed as complete.
         store.put(bid, result)
     return result
+
+
+# --- Live route handler (added at deploy time, 2026-11-02) ---
+# The live server.py calls serve_batch() from a worker thread with the
+# live payment helpers passed in, so this module never imports server.py
+# at module load (no circular import) and never touches payment code
+# except through the callables the server supplies. Logic mirrors the
+# staging app.py route exactly: validate -> store replay check -> retry
+# path -> partial 409 -> claim -> verify -> settle -> run -> store.
+_batch_lock = threading.Lock()
+_BATCH_CLAIM_FRESH_SECONDS = 600
+
+
+def serve_batch(body, headers, verify, settle, requirements, pay_to, network, base_dir):
+    """Serve one Evidence Audit Batch request. Returns a (status, content_dict, extra_headers) tuple."""
+    import base64 as _b64
+    base_dir = Path(base_dir)
+    store_path = base_dir / "batch_store.json"
+    partial_path = base_dir / "batch_partial.json"
+    receipts_path = base_dir / "batch_receipts.jsonl"
+    claims_dir = base_dir / "claims"
+    lock_path = base_dir / ".batch_lock"
+
+    def challenge():
+        return (402, {"x402Version": 1, "accepts": [requirements], "extensions": {"bazaar": {"discoverable": True, "name": "Citrus Coast Evidence Audit Batch", "description": "Up to 10 Evidence Audit analyses in one $5 USDC batch. Caller-supplied sources only; textual coverage, not truth verification."}}, "error": "payment required: $5 USDC on Base for the Evidence Audit Batch"}, {"PAYMENT-REQUIRED": _b64.b64encode(json.dumps({"x402Version": 1, "accepts": [requirements]}).encode()).decode()})
+
+    def log_receipt(entry):
+        try:
+            with open(receipts_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, separators=(",", ":")) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        except Exception as e:
+            print(f"batch receipt write failed: {e}", file=sys.stderr)
+
+    def claim_path(bid):
+        return claims_dir / (bid + ".json")
+
+    audits = body.get("audits") if isinstance(body, dict) else None
+    errors = validate_audits(audits)
+    if errors:
+        return (400, {"error": "invalid batch", "errors": errors}, {})
+    with _batch_lock:
+        lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX)
+            store = BatchStore(store_path)
+            partial_store = PartialStore(partial_path)
+            bid = batch_id_for(canonical_audits(audits))
+            stored = store.get(bid)
+            if stored is not None:
+                replay = dict(stored)
+                replay["replayed"] = True
+                return (200, replay, {})
+            retry_bid = headers.get("x-batch-retry")
+            if retry_bid is not None:
+                if retry_bid != bid:
+                    return (400, {"error": "x-batch-retry batch_id does not match request body", "batch_id": bid}, {})
+                partial = partial_store.get(bid)
+                if partial is None:
+                    return (409, {"error": "no partial batch to retry for this batch_id", "batch_id": bid}, {})
+                merged = run_batch_remaining(partial, audits, store=store, partial_store=partial_store)
+                log_receipt({"agent": "citruscoastai", "direction": "retry", "resource": "/api/evidence-batch", "amount": 0, "asset": "USDC", "txid": (merged.get("settlement") or {}).get("transaction"), "batch_id": bid, "audit_count": merged.get("audit_count"), "status": merged.get("status")})
+                return (200, merged, {})
+            partial = partial_store.get(bid)
+            if partial is not None:
+                return (409, {"error": "batch partially completed; retry the remaining audits at no charge with header x-batch-retry: <batch_id> and no new payment", "batch_id": bid, "completed_count": partial.get("completed_count"), "status": "partial"}, {})
+            x_payment = headers.get("x-payment")
+            if not x_payment:
+                return challenge()
+            try:
+                payload = json.loads(_b64.b64decode(x_payment).decode())
+            except Exception:
+                return (402, {"error": "malformed X-PAYMENT header"}, {})
+            try:
+                existing = json.loads(claim_path(bid).read_text(encoding="utf-8"))
+            except Exception:
+                existing = None
+            if existing is not None:
+                age = time.time() - float(existing.get("claimed_at") or 0)
+                if age <= _BATCH_CLAIM_FRESH_SECONDS:
+                    return (409, {"error": "batch already in flight; do not resubmit payment", "batch_id": bid}, {})
+                return (409, {"error": "batch claim stale with no completed result; manual reconciliation required; do not resubmit payment", "batch_id": bid}, {})
+            payer_hint = payload.get("payer") if isinstance(payload, dict) else None
+            claims_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                fd = os.open(str(claim_path(bid)), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                stored = store.get(bid)
+                if stored is not None:
+                    replay = dict(stored)
+                    replay["replayed"] = True
+                    return (200, replay, {})
+                return (409, {"error": "batch already in flight; do not resubmit payment", "batch_id": bid}, {})
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(json.dumps({"batch_id": bid, "payer": payer_hint, "claimed_at": time.time(), "status": "in-flight"}, separators=(",", ":")))
+                    f.flush()
+                    os.fsync(f.fileno())
+            except Exception:
+                try:
+                    claim_path(bid).unlink()
+                except Exception:
+                    pass
+                return (409, {"error": "batch already in flight; do not resubmit payment", "batch_id": bid}, {})
+            ok, detail = verify(payload, requirements)
+            if not ok:
+                try:
+                    claim_path(bid).unlink()
+                except Exception:
+                    pass
+                return (402, {"error": f"payment invalid: {detail}"}, {})
+            settled, settle_resp, settle_detail = settle(payload, requirements)
+            if not settled:
+                try:
+                    claim_path(bid).unlink()
+                except Exception:
+                    pass
+                return (402, {"error": f"payment settlement failed: {settle_detail}"}, {})
+            result = run_batch(audits, store=store)
+            result["settlement"] = {"transaction": settle_resp.get("transaction"), "network": settle_resp.get("network") or network, "payer": settle_resp.get("payer")}
+            if result.get("status") == "partial":
+                partial_store.put(bid, result)
+            else:
+                store.put(bid, result)
+            log_receipt({"agent": "citruscoastai", "direction": "sell", "resource": "/api/evidence-batch", "amount": PRICE_USDC, "asset": "USDC", "txid": settle_resp.get("transaction"), "network": settle_resp.get("network") or network, "payer": settle_resp.get("payer"), "pay_to": pay_to, "batch_id": bid, "audit_count": result.get("audit_count"), "status": result.get("status")})
+            return (200, result, {"X-PAYMENT-RESPONSE": _b64.b64encode(json.dumps(settle_resp, separators=(",", ":")).encode()).decode()})
+        finally:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            except Exception:
+                pass
+            os.close(lock_fd)
